@@ -9,7 +9,9 @@ class ExamSession extends Model
 {
     use HasFactory; // Bạn đã import ở trên nhưng quên dùng ở đây, tôi đã thêm vào
 
-    protected $fillable = ['title', 'exam_id', 'start_at', 'end_at'];
+    protected $fillable = [
+    'title', 'exam_id', 'teacher_id', 'start_at', 'end_at', 'password', 'teacher_id'
+];
 
     // --- QUAN TRỌNG: THÊM ĐOẠN NÀY ĐỂ SỬA LỖI ---
     // Giúp Laravel tự động chuyển đổi chuỗi ngày tháng thành đối tượng Carbon

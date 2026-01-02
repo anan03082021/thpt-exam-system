@@ -1,22 +1,20 @@
-<!DOCTYPE html>
-<html lang="vi">
-<head>
-    <meta charset="UTF-8">
-    <title>Tạo đề thi mới</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
-<body class="bg-light">
-    <div class="container-fluid py-4">
+<x-layouts.teacher title="Tạo đề thi & Chọn câu hỏi">
+    
+    <div class="container-fluid p-0">
         <h3 class="mb-4 text-primary fw-bold">Tạo đề thi & Chọn câu hỏi</h3>
 
-        <div class="card shadow mb-4">
-            <div class="card-header bg-white fw-bold">1. Bộ lọc câu hỏi</div>
+        {{-- 1. BỘ LỌC CÂU HỎI --}}
+        <div class="card shadow-sm mb-4 border-0">
+            <div class="card-header bg-white fw-bold border-bottom">
+                <i class="bi bi-funnel"></i> 1. Bộ lọc câu hỏi
+            </div>
             <div class="card-body bg-light">
                 <form action="{{ route('teacher.exams.create') }}" method="GET">
                     <div class="row g-3">
+                        {{-- Hàng 1: Các bộ lọc ngắn --}}
                         <div class="col-md-2">
-                            <label class="form-label fw-bold">Lớp</label>
-                            <select name="grade" class="form-select">
+                            <label class="form-label fw-bold small">Lớp</label>
+                            <select name="grade" class="form-select form-select-sm">
                                 <option value="">-- Tất cả --</option>
                                 <option value="10" {{ request('grade') == '10' ? 'selected' : '' }}>Lớp 10</option>
                                 <option value="11" {{ request('grade') == '11' ? 'selected' : '' }}>Lớp 11</option>
@@ -25,8 +23,8 @@
                         </div>
                         
                         <div class="col-md-3">
-                            <label class="form-label fw-bold">Chủ đề</label>
-                            <select name="topic_id" class="form-select">
+                            <label class="form-label fw-bold small">Chủ đề</label>
+                            <select name="topic_id" class="form-select form-select-sm">
                                 <option value="">-- Tất cả --</option>
                                 @foreach($topics as $topic)
                                     <option value="{{ $topic->id }}" {{ request('topic_id') == $topic->id ? 'selected' : '' }}>
@@ -37,8 +35,8 @@
                         </div>
 
                         <div class="col-md-2">
-                            <label class="form-label fw-bold">Định hướng</label>
-                            <select name="orientation" class="form-select">
+                            <label class="form-label fw-bold small">Định hướng</label>
+                            <select name="orientation" class="form-select form-select-sm">
                                 <option value="">-- Tất cả --</option>
                                 <option value="chung" {{ request('orientation') == 'chung' ? 'selected' : '' }}>Chung</option>
                                 <option value="ict" {{ request('orientation') == 'ict' ? 'selected' : '' }}>ICT</option>
@@ -47,8 +45,8 @@
                         </div>
 
                         <div class="col-md-2">
-                            <label class="form-label fw-bold">Dạng câu hỏi</label>
-                            <select name="type" class="form-select">
+                            <label class="form-label fw-bold small">Dạng câu hỏi</label>
+                            <select name="type" class="form-select form-select-sm">
                                 <option value="">-- Tất cả --</option>
                                 <option value="single_choice" {{ request('type') == 'single_choice' ? 'selected' : '' }}>Trắc nghiệm</option>
                                 <option value="true_false_group" {{ request('type') == 'true_false_group' ? 'selected' : '' }}>Đúng/Sai chùm</option>
@@ -56,8 +54,8 @@
                         </div>
 
                         <div class="col-md-3">
-                            <label class="form-label fw-bold">Mức độ (Chỉ dạng 1)</label>
-                            <select name="cognitive_level_id" class="form-select">
+                            <label class="form-label fw-bold small">Mức độ</label>
+                            <select name="cognitive_level_id" class="form-select form-select-sm">
                                 <option value="">-- Tất cả --</option>
                                 @foreach($levels as $lv)
                                     <option value="{{ $lv->id }}" {{ request('cognitive_level_id') == $lv->id ? 'selected' : '' }}>
@@ -66,11 +64,12 @@
                                 @endforeach
                             </select>
                         </div>
-                        
-                        <div class="col-md-12">
-                            <label class="form-label fw-bold">Năng lực</label>
-                            <select name="competency_id" class="form-select">
-                                <option value="">-- Tất cả --</option>
+
+                        {{-- Hàng 2: Bộ lọc Năng lực (Mới bổ sung) --}}
+                        <div class="col-12">
+                            <label class="form-label fw-bold small">Năng lực</label>
+                            <select name="competency_id" class="form-select form-select-sm">
+                                <option value="">-- Tất cả năng lực --</option>
                                 @foreach($competencies as $comp)
                                     <option value="{{ $comp->id }}" {{ request('competency_id') == $comp->id ? 'selected' : '' }}>
                                         {{ $comp->code }}: {{ $comp->description }}
@@ -79,112 +78,131 @@
                             </select>
                         </div>
 
-                        <div class="col-12 text-end mt-3">
-                            <a href="{{ route('teacher.exams.create') }}" class="btn btn-secondary me-2">Đặt lại</a>
-                            <button type="submit" class="btn btn-primary px-4">🔍 Lọc câu hỏi</button>
+                        {{-- Nút bấm --}}
+                        <div class="col-12 text-end border-top pt-3 mt-3">
+                            <a href="{{ route('teacher.exams.create') }}" class="btn btn-secondary btn-sm me-2">Đặt lại bộ lọc</a>
+                            <button type="submit" class="btn btn-primary btn-sm px-4 fw-bold">🔍 Tìm kiếm câu hỏi</button>
                         </div>
                     </div>
                 </form>
             </div>
         </div>
 
-        <form action="{{ route('teacher.exams.store') }}" method="POST">
+        {{-- 2. KHU VỰC CHỌN CÂU HỎI VÀ TẠO ĐỀ --}}
+        <form action="{{ route('teacher.exams.store') }}" method="POST" id="createExamForm">
             @csrf
             
             <div class="row">
+                {{-- Cột Trái: Danh sách câu hỏi --}}
                 <div class="col-md-8">
-                    <div class="card shadow">
-                        <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                            <span class="fw-bold">Danh sách câu hỏi ({{ $questions->total() }} kết quả)</span>
-                            <div class="form-check">
+                    <div class="card shadow-sm border-0 mb-4">
+                        <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+                            <span class="fw-bold text-primary">
+                                📚 Danh sách câu hỏi ({{ $questions->total() }})
+                            </span>
+                            <div class="form-check form-switch">
                                 <input class="form-check-input" type="checkbox" id="checkAll">
-                                <label class="form-check-label" for="checkAll">Chọn tất cả trang này</label>
+                                <label class="form-check-label small fw-bold" for="checkAll">Chọn tất cả trang này</label>
                             </div>
                         </div>
                         <div class="card-body p-0">
-                            <table class="table table-hover mb-0 align-middle">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th width="40">#</th>
-                                        <th>Nội dung câu hỏi</th>
-                                        <th width="120">Phân loại</th>
-                                        <th width="100">Chi tiết</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @forelse($questions as $q)
+                            <div class="table-responsive">
+                                <table class="table table-hover mb-0 align-middle">
+                                    <thead class="table-light">
                                         <tr>
-                                            <td class="text-center">
-    <input class="form-check-input question-checkbox" 
-           type="checkbox" 
-           value="{{ $q->id }}" 
-           onchange="toggleQuestion(this.value, this.checked)">
-</td>
-                                            <td>
-                                                <div class="fw-bold text-truncate" style="max-width: 400px;">{{ $q->content }}</div>
-                                                <small class="text-muted">
-                                                    {{ $q->topic->name ?? 'Chưa có chủ đề' }} | 
-                                                    Lớp {{ $q->grade }} | 
-                                                    {{ strtoupper($q->orientation) }}
-                                                </small>
-                                            </td>
-                                            <td>
-                                                <span class="badge {{ $q->type == 'single_choice' ? 'bg-primary' : 'bg-warning text-dark' }}">
-                                                    {{ $q->type == 'single_choice' ? 'Trắc nghiệm' : 'Đúng/Sai' }}
-                                                </span>
-                                                <br>
-                                                @if($q->cognitiveLevel)
-                                                    <span class="badge bg-info text-dark mt-1">{{ $q->cognitiveLevel->name }}</span>
-                                                @endif
-                                            </td>
-                                            <td>
-                                                <a href="#" class="btn btn-sm btn-outline-secondary">Xem</a>
-                                            </td>
+                                            <th width="50" class="text-center">#</th>
+                                            <th>Nội dung</th>
+                                            <th width="150">Thông tin</th>
+                                            <th width="80">Chi tiết</th>
                                         </tr>
-                                    @empty
-                                        <tr>
-                                            <td colspan="4" class="text-center py-4 text-muted">Không tìm thấy câu hỏi nào phù hợp.</td>
-                                        </tr>
-                                    @endforelse
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody>
+                                        @forelse($questions as $q)
+                                            <tr>
+                                                <td class="text-center">
+                                                    <input class="form-check-input question-checkbox" 
+                                                           type="checkbox" 
+                                                           value="{{ $q->id }}" 
+                                                           style="transform: scale(1.3); cursor: pointer;"
+                                                           onchange="toggleQuestion('{{ $q->id }}', this.checked)">
+                                                </td>
+                                                <td>
+                                                    <div class="fw-bold text-dark text-truncate" style="max-width: 450px;" title="{{ $q->content }}">
+                                                        {{ Str::limit($q->content, 100) }}
+                                                    </div>
+                                                    {{-- Hiển thị thêm thông tin năng lực nếu có --}}
+                                                    @if($q->competency)
+                                                        <div class="small text-muted fst-italic mt-1">
+                                                            <i class="bi bi-lightning-charge"></i> {{ $q->competency->code }}
+                                                        </div>
+                                                    @endif
+                                                </td>
+                                                <td>
+                                                    <span class="badge bg-light text-dark border">{{ $q->grade }}</span>
+                                                    <span class="badge {{ $q->type == 'single_choice' ? 'bg-info' : 'bg-warning' }} bg-opacity-75 text-white">
+                                                        {{ $q->type == 'single_choice' ? 'TN' : 'Đ/S' }}
+                                                    </span>
+                                                    <div class="small text-muted mt-1">{{ $q->topic->name ?? 'N/A' }}</div>
+                                                </td>
+                                                <td>
+                                                    <button type="button" class="btn btn-sm btn-outline-secondary">Xem</button>
+                                                </td>
+                                            </tr>
+                                        @empty
+                                            <tr>
+                                                <td colspan="4" class="text-center py-5 text-muted">
+                                                    Không tìm thấy câu hỏi nào phù hợp với bộ lọc.
+                                                </td>
+                                            </tr>
+                                        @endforelse
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                         <div class="card-footer bg-white">
-                            {{ $questions->links() }}
+                            {{ $questions->withQueryString()->links() }} 
                         </div>
                     </div>
                 </div>
 
+                {{-- Cột Phải: Form thông tin đề thi (Sticky) --}}
                 <div class="col-md-4">
-                    <div class="card shadow sticky-top" style="top: 20px;">
-                        <div class="card-header bg-primary text-white fw-bold">
-                            Thông tin đề thi
+                    <div class="card shadow-sm border-0 sticky-top" style="top: 20px; z-index: 99;">
+                        <div class="card-header bg-primary text-white fw-bold py-3">
+                            📝 Thông tin đề thi
                         </div>
                         <div class="card-body">
+                            {{-- Tên đề --}}
                             <div class="mb-3">
-                                <label class="form-label">Tên đề thi <span class="text-danger">*</span></label>
-                                <input type="text" name="title" class="form-control" placeholder="Ví dụ: Kiểm tra 15 phút..." required>
+                                <label class="form-label fw-bold">Tên đề thi <span class="text-danger">*</span></label>
+                                <input type="text" name="title" class="form-control" placeholder="VD: Kiểm tra 15 phút Tin học 11" required>
                             </div>
                             
+                            {{-- Thời gian --}}
                             <div class="mb-3">
-                                <label class="form-label">Thời gian làm bài (phút) <span class="text-danger">*</span></label>
+                                <label class="form-label fw-bold">Thời gian (phút) <span class="text-danger">*</span></label>
                                 <input type="number" name="duration" class="form-control" value="45" min="5" required>
                             </div>
 
+                            {{-- Mật khẩu đề mẫu --}}
                             <div class="mb-3">
-                                <label class="form-label">Mật khẩu đề (Tùy chọn)</label>
-                                <input type="text" name="password" class="form-control" placeholder="Để trống nếu công khai">
+                                <label class="form-label fw-bold">Mật khẩu đề mẫu</label>
+                                <input type="text" name="password" class="form-control" placeholder="Bỏ trống nếu công khai">
+                                <div class="form-text text-muted small">Dùng cho giáo viên khác khi copy đề.</div>
                             </div>
 
-                            <div class="alert alert-info">
-    <strong>Đã chọn:</strong> <span id="countSelected">0</span> câu hỏi.
-</div>
+                            {{-- Hiển thị số lượng đã chọn --}}
+                            <div class="alert alert-warning d-flex align-items-center mb-3">
+                                <h2 class="mb-0 me-3 fw-bold text-primary" id="countSelected" style="font-size: 2rem;">0</h2>
+                                <div>câu hỏi<br>đã được chọn</div>
+                            </div>
 
-<input type="hidden" name="question_ids" id="finalQuestionIds">
+                            {{-- Input ẩn chứa danh sách ID --}}
+                            <input type="hidden" name="question_ids" id="finalQuestionIds">
 
-<button type="button" onclick="submitExamForm()" class="btn btn-success w-100 fw-bold py-2">
-    ✅ HOÀN TẤT TẠO ĐỀ
-</button>
+                            <button type="button" onclick="submitExamForm()" class="btn btn-success w-100 fw-bold py-3 shadow-sm">
+                                <i class="bi bi-check-circle-fill"></i> HOÀN TẤT TẠO ĐỀ
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -192,74 +210,67 @@
         </form>
     </div>
 
-<script>
-    // 1. Khởi tạo danh sách ID từ LocalStorage (hoặc mảng rỗng nếu chưa có)
-    let selectedQuestions = JSON.parse(localStorage.getItem('exam_cart')) || [];
+    {{-- Script xử lý LocalStorage --}}
+    <script>
+        // 1. Khởi tạo
+        let selectedQuestions = JSON.parse(localStorage.getItem('exam_cart')) || [];
 
-    // 2. Hàm chạy ngay khi load trang để tích lại các ô đã chọn trước đó
-    document.addEventListener("DOMContentLoaded", function() {
-        updateUI();
-        
-        // Duyệt qua tất cả checkbox trên trang hiện tại
-        document.querySelectorAll('.question-checkbox').forEach(cb => {
-            // Nếu ID của checkbox nằm trong danh sách đã lưu -> Tích vào
-            if (selectedQuestions.includes(cb.value)) {
-                cb.checked = true;
-            }
+        // 2. Chạy khi load trang
+        document.addEventListener("DOMContentLoaded", function() {
+            updateUI();
+            
+            // Tích vào các checkbox đã được lưu
+            document.querySelectorAll('.question-checkbox').forEach(cb => {
+                if (selectedQuestions.includes(cb.value)) {
+                    cb.checked = true;
+                }
+            });
         });
-    });
 
-    // 3. Hàm xử lý khi bấm vào 1 checkbox
-    function toggleQuestion(id, isChecked) {
-        if (isChecked) {
-            // Nếu chưa có thì thêm vào
-            if (!selectedQuestions.includes(id)) {
-                selectedQuestions.push(id);
+        // 3. Xử lý tích chọn từng cái
+        function toggleQuestion(id, isChecked) {
+            id = String(id);
+            if (isChecked) {
+                if (!selectedQuestions.includes(id)) selectedQuestions.push(id);
+            } else {
+                selectedQuestions = selectedQuestions.filter(item => item !== id);
             }
-        } else {
-            // Nếu bỏ tích thì xóa khỏi mảng
-            selectedQuestions = selectedQuestions.filter(item => item !== id);
-        }
-        
-        // Lưu lại vào LocalStorage và cập nhật giao diện số lượng
-        saveToStorage();
-    }
-
-    // 4. Hàm xử lý nút "Chọn tất cả trang này"
-    document.getElementById('checkAll').addEventListener('change', function() {
-        let isChecked = this.checked;
-        document.querySelectorAll('.question-checkbox').forEach(cb => {
-            cb.checked = isChecked;
-            toggleQuestion(cb.value, isChecked); // Gọi hàm xử lý từng cái
-        });
-    });
-
-    // 5. Các hàm phụ trợ
-    function saveToStorage() {
-        localStorage.setItem('exam_cart', JSON.stringify(selectedQuestions));
-        updateUI();
-    }
-
-    function updateUI() {
-        document.getElementById('countSelected').innerText = selectedQuestions.length;
-    }
-
-    // 6. Hàm xử lý khi bấm nút "Hoàn tất tạo đề"
-    function submitExamForm() {
-        if (selectedQuestions.length === 0) {
-            alert("Bạn chưa chọn câu hỏi nào!");
-            return;
+            saveToStorage();
         }
 
-        // Đổ dữ liệu từ mảng vào input ẩn (nối nhau bằng dấu phẩy)
-        document.getElementById('finalQuestionIds').value = selectedQuestions.join(',');
+        // 4. Chọn tất cả
+        const checkAllBox = document.getElementById('checkAll');
+        if(checkAllBox) {
+            checkAllBox.addEventListener('change', function() {
+                let isChecked = this.checked;
+                document.querySelectorAll('.question-checkbox').forEach(cb => {
+                    cb.checked = isChecked;
+                    toggleQuestion(cb.value, isChecked);
+                });
+            });
+        }
 
-        // Xóa Storage để lần tạo đề sau không bị nhớ lại đề này (Tùy chọn)
-        localStorage.removeItem('exam_cart'); 
+        // 5. Lưu và cập nhật UI
+        function saveToStorage() {
+            localStorage.setItem('exam_cart', JSON.stringify(selectedQuestions));
+            updateUI();
+        }
 
-        // Submit form thủ công
-        document.querySelector('form[action*="store"]').submit();
-    }
-</script>
-</body>
-</html>
+        function updateUI() {
+            const countSpan = document.getElementById('countSelected');
+            if(countSpan) countSpan.innerText = selectedQuestions.length;
+        }
+
+        // 6. Submit Form
+        function submitExamForm() {
+            if (selectedQuestions.length === 0) {
+                alert("Bạn chưa chọn câu hỏi nào!");
+                return;
+            }
+            document.getElementById('finalQuestionIds').value = selectedQuestions.join(',');
+            localStorage.removeItem('exam_cart'); 
+            document.getElementById('createExamForm').submit();
+        }
+    </script>
+
+</x-layouts.teacher>

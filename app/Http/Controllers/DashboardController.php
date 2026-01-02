@@ -10,82 +10,125 @@ use App\Models\ExamSession;
 use Carbon\Carbon;
 use App\Models\ExamAttempt;
 
-
 class DashboardController extends Controller
 {
     // Màn hình chính cho Giáo viên
-public function teacherDashboard()
+    public function teacherDashboard()
     {
-        // 1. Các số liệu thống kê (Code cũ)
+        // 1. Các số liệu thống kê
         $questionCount = Question::count();
         $examCount = Exam::count();
         $sessionCount = ExamSession::count();
 
-        // 2. THÊM DÒNG NÀY: Lấy danh sách 5 đề thi mới nhất để hiển thị ra bảng "$myExams"
-        // Nếu không muốn giới hạn 5 thì dùng Exam::latest()->get();
-        // Bỏ "with('topic')" đi
-$myExams = Exam::latest()->take(5)->get(); 
+        // 2. Lấy danh sách 5 đề thi mới nhất
+        $myExams = Exam::latest()->take(5)->get(); 
 
         // 3. Truyền thêm 'myExams' vào compact
         return view('teacher.dashboard', compact('questionCount', 'examCount', 'sessionCount', 'myExams'));
     }
 
-    // Màn hình chính cho Học sinh
-// 1. KỲ THI (DASHBOARD) - Chỉ lấy kỳ thi chính thức
-// 1. KỲ THI (Trang chủ) - Giữ nguyên view 'dashboard'
+    // Màn hình chính cho Học sinh (Kỳ thi)
 public function studentDashboard()
 {
-    $userEmail = Auth::user()->email;
-    $now = now();
+    // Lấy TẤT CẢ kỳ thi đang mở (chưa kết thúc)
+    // Bao gồm cả kỳ thi cần mật khẩu và kỳ thi whitelist
+    $officialSessions = \App\Models\ExamSession::with('exam')
+        ->where('end_at', '>', now()) // Chỉ lấy cái chưa hết hạn
+        ->orderBy('created_at', 'desc')
+        ->get();
 
-    $officialSessions = ExamSession::whereHas('students', function($q) use ($userEmail) {
-        $q->where('student_email', $userEmail);
-    })
-    // LOGIC MỚI: Chỉ cần chưa hết hạn là hiện (Bao gồm Sắp tới + Đang diễn ra)
-    ->where('end_at', '>=', $now)
-    ->orderBy('start_at', 'asc') // Sắp xếp kỳ thi gần nhất lên đầu
-    ->with('exam')
-    ->get();
-
+    // Truyền biến $officialSessions sang View (để khớp với code View bạn đang có)
     return view('dashboard', compact('officialSessions'));
 }
 
-    // 2. ĐỀ THI - Trỏ về view 'practice' (nằm ở resources/views/practice.blade.php)
+    // Danh sách đề luyện tập
     public function practiceList()
     {
         $practiceExams = Exam::with('topic')->latest()->get();
-        // SỬA: bỏ 'student.' đi
         return view('practice', compact('practiceExams'));
     }
 
-    // 3. LỊCH SỬ - Trỏ về view 'history' (nằm ở resources/views/history.blade.php)
-public function history()
+    // Lịch sử làm bài & Tiến độ
+    public function history()
     {
-        // 1. Lấy toàn bộ dữ liệu (Eager load để tránh query N+1)
+        $userId = Auth::id();
+
+        // 1. Lấy dữ liệu gốc
         $attempts = ExamAttempt::with(['exam', 'examSession'])
-            ->where('user_id', Auth::id())
-            ->orderBy('submitted_at', 'desc')
+            ->where('user_id', $userId)
+            ->orderBy('submitted_at', 'asc') 
             ->get();
 
-        // 2. Tách danh sách A: Kỳ thi chính thức (Có session_id và khác 0)
+        // 2. Tách dữ liệu
+        // A. Danh sách thi thật
         $examAttempts = $attempts->filter(function ($item) {
             return !empty($item->exam_session_id) && $item->exam_session_id != 0;
-        });
+        })->sortByDesc('submitted_at');
 
-        // 3. Tách danh sách B: Luyện tập (Không có session_id hoặc bằng 0)
-        $practiceAttempts = $attempts->filter(function ($item) {
+        // B. Danh sách luyện tập (CẦN GOM NHÓM)
+        $rawPracticeAttempts = $attempts->filter(function ($item) {
             return empty($item->exam_session_id) || $item->exam_session_id == 0;
         });
 
-        // 4. Trả về View với 2 biến mới (QUAN TRỌNG)
-        return view('history', compact('examAttempts', 'practiceAttempts'));
-    }
+        // --- GOM NHÓM LUYỆN TẬP ---
+        $practiceHistory = [];
+        $chartDataByExam = [];
 
-    // 4. TÀI LIỆU - Trỏ về view 'documents'
-    public function documents()
-    {
-        $documents = []; // Tạm thời rỗng
-        // SỬA: bỏ 'student.' đi
-        return view('documents', compact('documents'));
+        // Gom nhóm theo Exam ID
+        $grouped = $rawPracticeAttempts->groupBy('exam_id');
+
+        foreach ($grouped as $examId => $listAttempts) {
+            // Lấy thông tin đề thi từ bản ghi đầu tiên
+            $examInfo = $listAttempts->first()->exam;
+            $examTitle = $examInfo ? $examInfo->title : 'Đề thi đã xóa';
+
+            // --- BƯỚC SỬA LỖI QUAN TRỌNG TẠI ĐÂY ---
+            // 1. Lấy bài làm mới nhất ra trước
+            $latestAttempt = $listAttempts->sortByDesc('submitted_at')->first();
+
+            // 2. Kiểm tra tồn tại để tránh lỗi
+            if ($latestAttempt) {
+                $practiceHistory[] = [
+                    'exam_id' => $examId,
+                    'title' => $examTitle,
+                    'count' => $listAttempts->count(),
+                    'best_score' => $listAttempts->max('total_score'),
+                    'average_score' => $listAttempts->avg('total_score'), // Đã thêm dấu phẩy ở đây
+                    
+                    // Các trường mới thêm vào
+                    'latest_id' => $latestAttempt->id,
+                    'latest_score' => $latestAttempt->total_score,
+                    'latest_at' => $latestAttempt->submitted_at,
+                ];
+
+                // Chuẩn bị dữ liệu cho biểu đồ
+                $chartDataByExam[$examId] = $listAttempts->map(function ($item) {
+                    return [
+                        'date' => \Carbon\Carbon::parse($item->submitted_at)->format('d/m H:i'),
+                        'score' => $item->total_score
+                    ];
+                })->values();
+            }
+        }
+
+        // --- DỮ LIỆU THỐNG KÊ CHUNG ---
+        $totalExamsAvailable = Exam::count(); 
+        $examsTakenCount = $grouped->count();
+
+        $barChartData = $examAttempts->take(10)->map(function ($item) {
+            return [
+                'label' => $item->examSession->title ?? 'Kỳ thi',
+                'score' => $item->total_score
+            ];
+        })->values();
+
+        return view('history', compact(
+            'examAttempts', 
+            'practiceHistory',
+            'totalExamsAvailable',
+            'examsTakenCount',
+            'barChartData',
+            'chartDataByExam'
+        ));
     }
 }
