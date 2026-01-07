@@ -112,11 +112,24 @@
             </div>
 
             {{-- Biểu đồ cột: Điểm số --}}
+            {{-- Biểu đồ Radar: Mức độ thành thạo theo chủ đề --}}
             <div class="col-md-8">
-                <div class="stats-card p-4">
-                    <h5 class="fw-bold text-secondary mb-4"><i class="bi bi-bar-chart-line-fill me-2 text-primary"></i> Phổ điểm Kỳ thi chính thức</h5>
-                    <div style="height: 250px; width: 100%;">
-                        <canvas id="examBarChart"></canvas>
+                <div class="stats-card p-4 h-100">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h5 class="fw-bold text-secondary mb-0">
+                            <i class="bi bi-radar me-2 text-primary"></i> Mức độ thành thạo theo chủ đề
+                        </h5>
+                        <span class="badge bg-light text-muted border">Thang điểm 10</span>
+                    </div>
+                    
+                    <div style="height: 300px; width: 100%; display: flex; justify-content: center;">
+                        <canvas id="topicRadarChart"></canvas>
+                    </div>
+                    
+                    {{-- Chú thích nhỏ --}}
+                    <div class="mt-3 text-center small text-muted">
+                        <span class="me-3"><i class="bi bi-circle-fill text-primary" style="font-size: 8px;"></i> Năng lực hiện tại</span>
+                        <span><i class="bi bi-circle-fill text-secondary opacity-25" style="font-size: 8px;"></i> Mức tối đa</span>
                     </div>
                 </div>
             </div>
@@ -178,9 +191,10 @@
                                             </span>
                                         </td>
                                         <td class="text-end pe-4">
-                                            <a href="{{ route('exam.result', $attempt->id) }}" class="btn btn-sm btn-outline-primary rounded-pill fw-bold px-3">
-                                                Xem kết quả <i class="bi bi-arrow-right-short"></i>
-                                            </a>
+                                            <a href="{{ route('student.exam.result.official', $attempt->id) }}" 
+   class="btn btn-sm btn-outline-primary rounded-pill fw-bold px-3 transition-hover">
+    Xem kết quả <i class="bi bi-arrow-right-short"></i>
+</a>
                                         </td>
                                     </tr>
                                 @endforeach
@@ -235,7 +249,7 @@
                                         </td>
 
                                         <td class="text-end pe-4">
-                                            <a href="{{ route('exam.result', $item['latest_id']) }}" 
+                                            <a href="{{ route('student.exam.result.practice', $item['latest_id']) }}" 
                                                class="btn btn-sm btn-outline-success rounded-pill fw-bold px-3">
                                                 <i class="bi bi-bar-chart-fill me-1"></i> Chi tiết
                                             </a>
@@ -258,9 +272,9 @@
     </div>
 
     {{-- Script vẽ biểu đồ (Logic giữ nguyên, chỉ chỉnh màu cho khớp theme Bootstrap) --}}
-    <script>
+<script>
         document.addEventListener('DOMContentLoaded', function() {
-            // 1. Biểu đồ Tròn
+            // 1. Biểu đồ Tròn (Độ phủ) - GIỮ NGUYÊN
             const ctxPie = document.getElementById('progressChart').getContext('2d');
             new Chart(ctxPie, {
                 type: 'doughnut',
@@ -268,7 +282,6 @@
                     labels: ['Đã làm', 'Chưa làm'],
                     datasets: [{
                         data: [{{ $examsTakenCount }}, {{ $totalExamsAvailable - $examsTakenCount }}],
-                        // Màu Vàng (Warning) và Xám nhạt
                         backgroundColor: ['#ffc107', '#e9ecef'], 
                         borderWidth: 0,
                         hoverOffset: 10
@@ -281,41 +294,65 @@
                 }
             });
 
-            // 2. Biểu đồ Cột
-            const ctxBar = document.getElementById('examBarChart').getContext('2d');
-            const barData = @json($barChartData);
+            // 2. Biểu đồ Radar (Mức độ thành thạo) - MỚI
+            const ctxRadar = document.getElementById('topicRadarChart').getContext('2d');
             
-            // Gradient Xanh dương (Primary)
-            let barGradient = ctxBar.createLinearGradient(0, 0, 0, 300);
-            barGradient.addColorStop(0, '#0d6efd'); // Blue bootstrap
-            barGradient.addColorStop(1, '#a6c8ff'); // Light blue
+            // Dữ liệu mẫu (Nếu Controller chưa trả về, bạn cần cập nhật Controller để tính toán)
+            // Cấu trúc mong đợi từ Controller: $topicMastery = [['name' => 'Chủ đề A', 'score' => 8], ...]
+            // Ở đây tôi dùng biến $topicMastery được truyền từ Controller
+            const topicData = @json($topicMastery ?? []); 
+            
+            // Nếu chưa có dữ liệu thật, dùng dữ liệu giả lập để test giao diện
+            const labels = topicData.length > 0 ? topicData.map(t => t.name) : ['Chủ đề A', 'Chủ đề B', 'Chủ đề C', 'Chủ đề D', 'Chủ đề E', 'Chủ đề F', 'Chủ đề G'];
+            const scores = topicData.length > 0 ? topicData.map(t => t.score) : [0, 0, 0, 0, 0, 0, 0]; // Mặc định 0 nếu chưa làm
 
-            new Chart(ctxBar, {
-                type: 'bar',
+            new Chart(ctxRadar, {
+                type: 'radar',
                 data: {
-                    labels: barData.map(i => i.label),
-                    datasets: [{ 
-                        label: 'Điểm', 
-                        data: barData.map(i => i.score), 
-                        backgroundColor: barGradient,
-                        borderRadius: 8,
-                        barThickness: 30,
+                    labels: labels,
+                    datasets: [{
+                        label: 'Điểm trung bình',
+                        data: scores,
+                        fill: true,
+                        backgroundColor: 'rgba(13, 110, 253, 0.2)', // Xanh dương nhạt
+                        borderColor: '#0d6efd', // Xanh dương đậm
+                        pointBackgroundColor: '#0d6efd',
+                        pointBorderColor: '#fff',
+                        pointHoverBackgroundColor: '#fff',
+                        pointHoverBorderColor: '#0d6efd',
+                        borderWidth: 2,
+                        pointRadius: 4
                     }]
                 },
-                options: { 
-                    responsive: true, 
-                    maintainAspectRatio: false, 
-                    scales: { 
-                        y: { 
-                            beginAtZero: true, 
-                            max: 10, 
-                            grid: { borderDash: [5, 5], color: '#e9ecef' } 
-                        },
-                        x: { 
-                            grid: { display: false } 
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return context.formattedValue + ' điểm';
+                                }
+                            }
                         }
-                    }, 
-                    plugins: { legend: { display: false } } 
+                    },
+                    scales: {
+                        r: {
+                            angleLines: { color: '#e9ecef' }, // Màu tia
+                            grid: { color: '#e9ecef' },       // Màu lưới vòng tròn
+                            pointLabels: {
+                                font: { size: 12, weight: 'bold' },
+                                color: '#495057' // Màu chữ tên chủ đề
+                            },
+                            suggestedMin: 0,
+                            suggestedMax: 10, // Thang điểm 10
+                            ticks: {
+                                stepSize: 2,
+                                display: false // Ẩn số trên trục để đỡ rối
+                            }
+                        }
+                    }
                 }
             });
         });

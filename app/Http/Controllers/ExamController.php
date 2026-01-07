@@ -89,10 +89,13 @@ class ExamController extends Controller
 
     // 3. XỬ LÝ NỘP BÀI
     // Route: /exam/submit/{sessionId}
-    public function submitExam(Request $request, $sessionId)
+public function submitExam(Request $request, $sessionId)
     {
-        // TRƯỜNG HỢP 1: LUYỆN TẬP (Session ID = 0)
-        if ($sessionId == 0) {
+        // 1. KHAI BÁO BIẾN $isPractice NGAY ĐẦU HÀM
+        $isPractice = ($sessionId == 0); 
+
+        // TRƯỜNG HỢP 1: LUYỆN TẬP
+        if ($isPractice) {
             $examId = $request->exam_id_hidden;
         } 
         // TRƯỜNG HỢP 2: THI CHÍNH THỨC
@@ -100,23 +103,22 @@ class ExamController extends Controller
             $session = ExamSession::findOrFail($sessionId);
             $examId = $session->exam_id;
 
-            // Kiểm tra thời gian nộp bài (cho phép trễ 2 phút)
+            // Kiểm tra thời gian nộp bài
             if (now() > $session->end_at->addMinutes(2)) {
-                return redirect()->route('student.dashboard')->with('error', 'Quá giờ nộp bài!');
+                return redirect()->route('dashboard')->with('error', 'Quá giờ nộp bài!');
             }
         }
 
-        // 1. Tạo lượt thi mới
+        // ... (Phần tạo Attempt và lưu câu trả lời giữ nguyên) ...
         $attempt = ExamAttempt::create([
             'user_id' => Auth::id(),
             'exam_id' => $examId,
             'exam_session_id' => $sessionId, 
-            'started_at' => now(), // (Tạm tính)
+            'started_at' => now(),
             'submitted_at' => now(),
             'total_score' => 0
         ]);
 
-        // 2. Lưu câu trả lời
         if ($request->has('answers')) {
             foreach ($request->answers as $questionId => $answerId) {
                 $answer = Answer::find($answerId);
@@ -131,49 +133,19 @@ class ExamController extends Controller
             }
         }
 
-        // 3. Tính điểm
+        // Tính điểm
         $this->examService->calculateScore($attempt->id);
 
-        // 4. Chuyển hướng xem kết quả
-        return redirect()->route('exam.result', $attempt->id);
+        // 4. CHUYỂN HƯỚNG SỬ DỤNG BIẾN $isPractice
+        if ($isPractice) {
+            return redirect()->route('student.exam.result.practice', $attempt->id);
+        } else {
+            return redirect()->route('student.exam.result.official', $attempt->id);
+        }
     }
-
     // 4. XEM KẾT QUẢ
     // Route: /exam/result/{attemptId}
-    public function showResult($attemptId)
-    {
-        $attemptDetail = ExamAttempt::with([
-            'exam',
-            'attemptAnswers.question.topic',
-            'attemptAnswers.question.answers',
-            'attemptAnswers.question.parent',
-            'attemptAnswers.selectedAnswer'
-        ])
-        ->where('id', $attemptId)
-        ->where('user_id', Auth::id())
-        ->firstOrFail();
 
-        $exam = $attemptDetail->exam;
-        $score = $attemptDetail->total_score;
-        $suggestions = $this->examService->getReviewSuggestions($attemptDetail->id);
-
-        // Lấy dữ liệu vẽ biểu đồ
-        $historyAttempts = ExamAttempt::where('exam_id', $attemptDetail->exam_id)
-            ->where('user_id', Auth::id())
-            ->whereNotNull('submitted_at')
-            ->orderBy('submitted_at', 'asc')
-            ->get();
-
-        $chartData = $historyAttempts->map(function ($item) use ($attemptDetail) {
-            return [
-                'date' => \Carbon\Carbon::parse($item->submitted_at)->format('d/m H:i'),
-                'score' => $item->total_score,
-                'is_current' => $item->id == $attemptDetail->id 
-            ];
-        })->values();
-
-        return view('exam.result', compact('attemptDetail', 'exam', 'score', 'suggestions', 'chartData'));
-    }
 
     // 5. BẮT ĐẦU LUYỆN TẬP
     public function startPractice($examId)
@@ -211,4 +183,97 @@ class ExamController extends Controller
 
         return view('history', compact('examAttempts', 'practiceAttempts'));
     }
+    // --- [MỚI] HÀM HIỂN THỊ KẾT QUẢ KỲ THI CHÍNH THỨC ---
+// Mở file App\Http\Controllers\Student\ExamController.php
+
+public function showOfficialResult($id)
+{
+    $userId = Auth::id();
+
+    // 1. Load thật kỹ các quan hệ để View không bị lỗi
+    $attempt = ExamAttempt::with([
+        'examSession',
+        'attemptAnswers.selectedAnswer',
+        // Load quan hệ cho câu hỏi đơn
+        'attemptAnswers.question.answers', 
+        'attemptAnswers.question.topic',
+        'attemptAnswers.question.coreContent', 
+        'attemptAnswers.question.learningObjective',
+        // Load quan hệ cho câu hỏi cha (nếu là câu hỏi chùm)
+        'attemptAnswers.question.parent.topic',
+        'attemptAnswers.question.parent.coreContent',
+        'attemptAnswers.question.parent.learningObjective',
+        'attemptAnswers.question.parent.answers' // Load đáp án của câu cha nếu cần
+    ])
+    ->where('user_id', $userId)
+    ->findOrFail($id);
+
+    // 2. Logic NHÓM CÂU HỎI (Quan trọng để dùng được code của bạn)
+    // Nếu câu hỏi có cha (parent_id), nhóm theo ID cha. Nếu không, nhóm theo ID chính nó.
+    $groupedQuestions = $attempt->attemptAnswers->groupBy(function ($ans) {
+        return $ans->question->parent_id ?? $ans->question->id;
+    });
+
+    // 3. Các logic tính toán thống kê (Giữ nguyên)
+    $sessionId = $attempt->exam_session_id;
+    if ($sessionId) {
+        $averageScore = ExamAttempt::where('exam_session_id', $sessionId)->avg('total_score');
+        $maxScore = ExamAttempt::where('exam_session_id', $sessionId)->max('total_score');
+        $beatCount = ExamAttempt::where('exam_session_id', $sessionId)
+            ->where('total_score', '<', $attempt->total_score)
+            ->count();
+    } else {
+        $averageScore = 0; $maxScore = 0; $beatCount = 0;
+    }
+
+    // 4. Truyền biến $groupedQuestions sang View
+    return view('exam.result_official', compact(
+        'attempt', 
+        'groupedQuestions', // <--- Biến mới quan trọng
+        'averageScore', 
+        'maxScore', 
+        'beatCount'
+    ));
+}
+
+    // --- [MỚI] HÀM HIỂN THỊ KẾT QUẢ LUYỆN TẬP ---
+// THÊM LẠI HÀM NÀY VÀO CUỐI CLASS
+public function showResult($attemptId)
+{
+    // Lấy chi tiết bài làm kèm theo các quan hệ cần thiết
+    $attemptDetail = ExamAttempt::with([
+        'exam',
+        'attemptAnswers.question.topic',
+        'attemptAnswers.question.answers',
+        'attemptAnswers.question.parent',
+        'attemptAnswers.selectedAnswer'
+    ])
+    ->where('id', $attemptId)
+    ->where('user_id', Auth::id())
+    ->firstOrFail();
+
+    $exam = $attemptDetail->exam;
+    $score = $attemptDetail->total_score;
+    
+    // Logic gợi ý ôn tập (nếu bạn có service này)
+    $suggestions = $this->examService->getReviewSuggestions($attemptDetail->id);
+
+    // Lấy dữ liệu vẽ biểu đồ lịch sử (Code cũ của bạn)
+    $historyAttempts = ExamAttempt::where('exam_id', $attemptDetail->exam_id)
+        ->where('user_id', Auth::id())
+        ->whereNotNull('submitted_at')
+        ->orderBy('submitted_at', 'asc')
+        ->get();
+
+    $chartData = $historyAttempts->map(function ($item) use ($attemptDetail) {
+        return [
+            'date' => \Carbon\Carbon::parse($item->submitted_at)->format('d/m H:i'),
+            'score' => $item->total_score,
+            'is_current' => $item->id == $attemptDetail->id 
+        ];
+    })->values();
+
+    // Trả về view cũ: exam.result
+    return view('exam.result', compact('attemptDetail', 'exam', 'score', 'suggestions', 'chartData'));
+}
 }

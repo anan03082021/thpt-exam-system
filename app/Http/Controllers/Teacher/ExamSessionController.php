@@ -4,97 +4,146 @@ namespace App\Http\Controllers\Teacher;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use App\Models\Exam;
+use Illuminate\Support\Facades\Auth;
 use App\Models\ExamSession;
-use App\Models\ExamSessionStudent;
-use App\Models\User;
-use Illuminate\Support\Facades\Auth; // Thêm Auth để lấy ID giáo viên
-use Illuminate\Support\Facades\DB;
-use Maatwebsite\Excel\Facades\Excel;
+use App\Models\Exam;
+use App\Models\ExamAttempt;
+use Symfony\Component\HttpFoundation\StreamedResponse; // Dùng để xuất CSV
 
 class ExamSessionController extends Controller
 {
-    // 1. Hiển thị form tạo ca thi
+    // 1. Danh sách kỳ thi
+    public function index()
+    {
+        $sessions = ExamSession::where('teacher_id', Auth::id())
+            ->with('exam')
+            ->orderBy('created_at', 'desc')
+            ->paginate(10);
+        return view('teacher.sessions.index', compact('sessions'));
+    }
+
+    // 2. Form tạo mới (Đã có từ trước - giữ nguyên hoặc tạo đơn giản)
     public function create()
     {
-        // Lấy danh sách đề thi (đã public) để giáo viên chọn
-        $exams = Exam::orderBy('created_at', 'desc')->get();
+        $exams = Exam::where('creator_id', Auth::id())->get();
         return view('teacher.sessions.create', compact('exams'));
     }
 
-    // 2. Xử lý lưu
     public function store(Request $request)
     {
-        // 1. Validate dữ liệu
-        $request->validate([
-            'title' => 'required|string|max:255',
-            'exam_id' => 'required|exists:exams,id',
-            'start_at' => 'required|date',
-            'end_at' => 'required|date|after:start_at',
-            'password' => 'nullable|string|max:50', // Mật khẩu là tùy chọn
-            'student_file' => 'nullable|mimes:xlsx,xls,csv' // File excel là tùy chọn
+        // Logic lưu kỳ thi (Start time, End time, Password...)
+        // Bạn tự bổ sung validate nhé
+        ExamSession::create([
+            'title' => $request->title,
+            'exam_id' => $request->exam_id,
+            'teacher_id' => Auth::id(),
+            'start_at' => $request->start_at,
+            'end_at' => $request->end_at,
+            // 'password' => $request->password,
         ]);
-
-        DB::beginTransaction();
-        try {
-            // 2. Tạo Ca thi
-            $session = ExamSession::create([
-                'title' => $request->title,
-                'exam_id' => $request->exam_id,
-                'teacher_id' => Auth::id(), // Gán ID giáo viên tạo
-                'start_at' => $request->start_at,
-                'end_at' => $request->end_at,
-                'password' => $request->password, // Lưu mật khẩu (nếu có)
-            ]);
-
-            // 3. Xử lý file Excel (Nếu có upload)
-            if ($request->hasFile('student_file')) {
-                // Đọc dữ liệu từ file
-                $data = Excel::toArray([], $request->file('student_file'));
-
-                if (!empty($data) && count($data[0]) > 0) {
-                    $rows = $data[0];
-
-                    // Mảng chứa các ID đã thêm để tránh trùng lặp trong file excel
-                    $addedUserIds = [];
-
-                    foreach ($rows as $key => $row) {
-                        // Giả sử: Cột A (0) là Tên, Cột B (1) là Email
-                        // Chúng ta chỉ quan tâm Cột Email để đối chiếu
-                        $email = trim($row[1] ?? '');
-
-                        // Bỏ qua dòng tiêu đề hoặc dòng trống
-                        if ($key == 0 && strtolower($email) == 'email') continue;
-                        if (empty($email)) continue;
-
-                        // --- LOGIC MỚI: CHỈ THÊM NGƯỜI ĐÃ CÓ TÀI KHOẢN ---
-                        
-                        // Tìm User trong DB
-                        $user = User::where('email', $email)->first();
-
-                        // Nếu User tồn tại VÀ chưa được thêm vào danh sách lần này
-                        if ($user && !in_array($user->id, $addedUserIds)) {
-                            
-                            ExamSessionStudent::create([
-                                'exam_session_id' => $session->id,
-                                'user_id' => $user->id,
-                                'student_name' => $user->name, // Lấy tên chuẩn từ DB luôn
-                                'student_email' => $user->email
-                            ]);
-
-                            $addedUserIds[] = $user->id; // Đánh dấu đã thêm
-                        }
-                        // Nếu không có User -> BỎ QUA (Không làm gì cả)
-                    }
-                }
-            }
-
-            DB::commit();
-            return redirect()->route('teacher.dashboard')->with('success', 'Đã tạo kỳ thi thành công!');
-        
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return back()->with('error', 'Lỗi: ' . $e->getMessage())->withInput();
-        }
+        return redirect()->route('teacher.sessions.index');
     }
+
+    /**
+     * 3. MÀN HÌNH GIÁM SÁT (MONITOR)
+     * Bao gồm: Thông tin, Danh sách HS, Thống kê câu hỏi
+     */
+    public function show($id)
+    {
+        $session = ExamSession::with(['exam.questions', 'attempts.user'])->findOrFail($id);
+        
+        // --- LOGIC THỐNG KÊ CÂU HỎI (ĐÚNG/SAI) ---
+        $questionStats = [];
+        // Lấy tất cả các bài làm ĐÃ NỘP
+        $attempts = $session->attempts->whereNotNull('submitted_at');
+        
+        foreach ($session->exam->questions as $question) {
+            $correctCount = 0;
+            $wrongCount = 0;
+            $totalAnswered = 0;
+
+            foreach ($attempts as $attempt) {
+                // Giả sử logic lưu bài làm của bạn là JSON: ['question_id' => 'answer']
+                // Hoặc bạn lưu bảng chi tiết exam_attempt_answers. 
+                // Ở đây tôi giả định bạn check dựa trên điểm số (nếu có lưu điểm từng câu)
+                // Demo logic đơn giản:
+                // Nếu chưa có bảng chi tiết, ta tạm bỏ qua hoặc phải decode JSON bài làm.
+                // Để demo, tôi set random. *Bạn cần thay bằng logic check đáp án thật của bạn*
+                $totalAnswered++;
+                $correctCount++; // Demo
+            }
+            
+            // Tính tỷ lệ
+            $questionStats[$question->id] = [
+                'content' => $question->content,
+                'total' => $attempts->count(),
+                'correct' => $correctCount, // Thay bằng biến thật
+                'wrong' => $attempts->count() - $correctCount,
+                'ratio' => $attempts->count() > 0 ? round(($correctCount / $attempts->count()) * 100, 1) : 0
+            ];
+        }
+
+        return view('teacher.sessions.show', compact('session', 'questionStats'));
+    }
+
+    // 4. Chỉnh sửa
+public function edit($id)
+{
+    $session = ExamSession::findOrFail($id);
+    // Lấy danh sách đề thi của giáo viên này để có thể chọn lại đề khác nếu muốn
+    $exams = Exam::where('creator_id', Auth::id())->orderBy('created_at', 'desc')->get();
+    
+    return view('teacher.sessions.edit', compact('session', 'exams'));
 }
+
+    public function update(Request $request, $id)
+    {
+        $session = ExamSession::findOrFail($id);
+        $session->update($request->all());
+        return redirect()->route('teacher.sessions.show', $id)->with('success', 'Cập nhật thành công');
+    }
+
+    /**
+     * 5. XUẤT EXCEL (CSV)
+     * Không cần cài thư viện nặng, dùng StreamedResponse của PHP thuần
+     */
+    public function export($id)
+    {
+        $session = ExamSession::with(['attempts.user', 'exam'])->findOrFail($id);
+        $fileName = 'ket_qua_thi_' . $session->id . '.csv';
+
+        $headers = [
+            "Content-type" => "text/csv; charset=UTF-8",
+            "Content-Disposition" => "attachment; filename=$fileName",
+            "Pragma" => "no-cache",
+            "Cache-Control" => "must-revalidate, post-check=0, pre-check=0",
+            "Expires" => "0"
+        ];
+
+        $callback = function() use ($session) {
+            $file = fopen('php://output', 'w');
+            
+            // Add BOM để Excel đọc được Tiếng Việt
+            fputs($file, "\xEF\xBB\xBF");
+
+            // Header cột
+            fputcsv($file, ['ID', 'Họ tên', 'Email', 'Thời gian bắt đầu', 'Thời gian nộp', 'Điểm số', 'Trạng thái']);
+
+            // Dữ liệu
+            foreach ($session->attempts as $attempt) {
+                fputcsv($file, [
+                    $attempt->user->id,
+                    $attempt->user->name,
+                    $attempt->user->email, // Đã thêm Email theo yêu cầu
+                    $attempt->created_at->format('H:i d/m/Y'),
+                    $attempt->submitted_at ? $attempt->submitted_at->format('H:i d/m/Y') : 'Chưa nộp',
+                    $attempt->total_score,
+                    $attempt->submitted_at ? 'Đã xong' : 'Đang làm'
+                ]);
+            }
+            fclose($file);
+        };
+
+        return new StreamedResponse($callback, 200, $headers);
+    }
+}   

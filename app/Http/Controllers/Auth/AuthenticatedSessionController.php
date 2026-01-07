@@ -23,22 +23,30 @@ class AuthenticatedSessionController extends Controller
      * Handle an incoming authentication request.
      */
 public function store(LoginRequest $request): RedirectResponse
-    {
-        $request->authenticate();
+{
+    $request->authenticate();
 
-        $request->session()->regenerate();
+    $request->session()->regenerate();
 
-        // --- SỬA ĐOẠN NÀY ---
-        // Kiểm tra Role của người vừa đăng nhập
-        if ($request->user()->role === 'admin') {
-            // Nếu là Giáo viên -> Chuyển sang Dashboard Giáo viên
-            return redirect()->intended(route('teacher.dashboard'));
-        }
+    // Lấy thông tin user hiện tại
+    $user = $request->user();
 
-        // Nếu là Học sinh (hoặc khác) -> Chuyển sang Dashboard Học sinh
-        return redirect()->intended(route('dashboard'));
-        // --------------------
+    // TRƯỜNG HỢP 1: ADMIN (Quản trị viên)
+    // Chuyển hướng đến trang quản lý tài khoản/hệ thống
+    if ($user->role === 'admin') {
+        return redirect()->intended(route('admin.dashboard'));
     }
+
+    // TRƯỜNG HỢP 2: TEACHER (Giáo viên)
+    // Chuyển hướng đến trang quản lý ngân hàng câu hỏi/đề thi
+    // Lưu ý: Trong code cũ bạn gán role 'admin' vào route teacher, hãy sửa lại database role='teacher' cho giáo viên
+    if ($user->role === 'teacher') {
+        return redirect()->intended(route('teacher.dashboard'));
+    }
+
+    // TRƯỜNG HỢP 3: STUDENT (Học sinh - Mặc định)
+    return redirect()->intended(route('dashboard'));
+}
 
     /**
      * Destroy an authenticated session.

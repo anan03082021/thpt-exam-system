@@ -11,10 +11,19 @@ class Question extends Model
 
     protected $fillable = [
         'grade', 'orientation', 'topic_id', 'content', 'explanation',
-        'type', 'parent_id', 'cognitive_level_id', 'competency_id'
+        'type', 'parent_id', 'cognitive_level_id', 'competency_id', 'learning_objective_id', 
+        'core_content_id'
     ];
 
     // --- CÁC MỐI QUAN HỆ (RELATIONSHIPS) ---
+
+    public function learningObjective() {
+        return $this->belongsTo(LearningObjective::class);
+    }
+
+    public function coreContent() {
+        return $this->belongsTo(CoreContent::class);
+    }
 
     public function topic() { 
         return $this->belongsTo(Topic::class); 
