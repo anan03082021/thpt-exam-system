@@ -12,6 +12,7 @@ class Question extends Model
     protected $fillable = [
         'grade', 'orientation', 'topic_id', 'content', 'explanation',
         'type', 'parent_id', 'cognitive_level_id', 'competency_id', 'learning_objective_id', 
+        'orientation',
         'core_content_id'
     ];
 

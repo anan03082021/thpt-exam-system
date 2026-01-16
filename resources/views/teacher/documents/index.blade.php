@@ -6,6 +6,7 @@
         .icon-word { color: #0d6efd; }
         .icon-excel { color: #198754; }
         .icon-zip { color: #ffc107; }
+        .icon-ppt { color: #fd7e14; }
     </style>
     @endpush
 
@@ -17,10 +18,22 @@
             </button>
         </div>
 
-        {{-- Bộ lọc --}}
+        {{-- BỘ LỌC (Đã thêm lọc theo Lớp) --}}
         <div class="card-body border-bottom bg-light">
             <form method="GET" class="row g-2 align-items-center">
-                <div class="col-auto fw-bold text-muted">Lọc theo:</div>
+                <div class="col-auto fw-bold text-muted"><i class="bi bi-funnel"></i> Lọc:</div>
+                
+                {{-- Lọc Lớp --}}
+                <div class="col-md-2">
+                    <select name="grade" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <option value="">-- Tất cả Lớp --</option>
+                        <option value="10" {{ request('grade') == '10' ? 'selected' : '' }}>Lớp 10</option>
+                        <option value="11" {{ request('grade') == '11' ? 'selected' : '' }}>Lớp 11</option>
+                        <option value="12" {{ request('grade') == '12' ? 'selected' : '' }}>Lớp 12</option>
+                    </select>
+                </div>
+
+                {{-- Lọc Chủ đề --}}
                 <div class="col-md-3">
                     <select name="topic_id" class="form-select form-select-sm" onchange="this.form.submit()">
                         <option value="">-- Tất cả chủ đề --</option>
@@ -31,15 +44,23 @@
                         @endforeach
                     </select>
                 </div>
+                
+                {{-- Nút Reset --}}
+                @if(request('grade') || request('topic_id'))
+                    <div class="col-auto">
+                        <a href="{{ route('teacher.documents.index') }}" class="btn btn-sm btn-outline-secondary">Xóa lọc</a>
+                    </div>
+                @endif
             </form>
         </div>
 
-        {{-- Danh sách --}}
+        {{-- DANH SÁCH --}}
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
                 <thead class="bg-light text-secondary small text-uppercase">
                     <tr>
                         <th class="ps-4">Tên tài liệu</th>
+                        <th>Lớp</th> {{-- Thêm cột Lớp --}}
                         <th>Chủ đề</th>
                         <th>Kích thước</th>
                         <th>Ngày đăng</th>
@@ -51,9 +72,12 @@
                         @php
                             $icon = 'bi-file-earmark';
                             $color = 'text-secondary';
-                            if(in_array($doc->file_type, ['pdf'])) { $icon = 'bi-file-earmark-pdf-fill'; $color = 'icon-pdf'; }
-                            if(in_array($doc->file_type, ['doc','docx'])) { $icon = 'bi-file-earmark-word-fill'; $color = 'icon-word'; }
-                            if(in_array($doc->file_type, ['xls','xlsx'])) { $icon = 'bi-file-earmark-excel-fill'; $color = 'icon-excel'; }
+                            $ft = strtolower($doc->file_type);
+                            
+                            if(str_contains($ft, 'pdf')) { $icon = 'bi-file-earmark-pdf-fill'; $color = 'icon-pdf'; }
+                            elseif(str_contains($ft, 'doc')) { $icon = 'bi-file-earmark-word-fill'; $color = 'icon-word'; }
+                            elseif(str_contains($ft, 'xls')) { $icon = 'bi-file-earmark-excel-fill'; $color = 'icon-excel'; }
+                            elseif(str_contains($ft, 'ppt')) { $icon = 'bi-file-earmark-slides-fill'; $color = 'icon-ppt'; }
                         @endphp
                         <tr>
                             <td class="ps-4">
@@ -65,11 +89,21 @@
                                     </div>
                                 </div>
                             </td>
-                            <td><span class="badge bg-light text-dark border">{{ $doc->topic->name }}</span></td>
-                            <td class="small text-muted">{{ round($doc->file_size / 1024, 2) }} KB</td>
+                            <td>
+                                {{-- Badge hiển thị Lớp --}}
+                                @if($doc->grade == 10)
+                                    <span class="badge bg-primary">Lớp 10</span>
+                                @elseif($doc->grade == 11)
+                                    <span class="badge bg-success">Lớp 11</span>
+                                @else
+                                    <span class="badge bg-warning text-dark">Lớp 12</span>
+                                @endif
+                            </td>
+                            <td><span class="badge bg-light text-dark border">{{ $doc->topic->name ?? 'N/A' }}</span></td>
+                            <td class="small text-muted">{{ $doc->file_size }}</td>
                             <td class="small text-muted">{{ $doc->created_at->format('d/m/Y') }}</td>
                             <td class="text-end pe-4">
-                                <a href="{{ route('teacher.documents.download', $doc->id) }}" class="btn btn-sm btn-light border text-primary" title="Tải xuống">
+                                <a href="{{ $doc->file_path }}" target="_blank" class="btn btn-sm btn-light border text-primary" title="Xem/Tải">
                                     <i class="bi bi-download"></i>
                                 </a>
                                 <form action="{{ route('teacher.documents.destroy', $doc->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Xóa tài liệu này?');">
@@ -82,7 +116,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="5" class="text-center py-5 text-muted">Chưa có tài liệu nào.</td>
+                            <td colspan="6" class="text-center py-5 text-muted">Chưa có tài liệu nào.</td>
                         </tr>
                     @endforelse
                 </tbody>
@@ -91,7 +125,7 @@
         <div class="card-footer bg-white py-3">{{ $documents->links() }}</div>
     </div>
 
-    {{-- MODAL UPLOAD --}}
+    {{-- MODAL UPLOAD (Đã thêm chọn Lớp) --}}
     <div class="modal fade" id="uploadModal" tabindex="-1">
         <div class="modal-dialog">
             <div class="modal-content">
@@ -106,9 +140,22 @@
                             <label class="form-label fw-bold">Tên tài liệu <span class="text-danger">*</span></label>
                             <input type="text" name="title" class="form-control" required placeholder="VD: Đề cương ôn tập HK1">
                         </div>
+                        
+                        {{-- THÊM: Chọn Lớp --}}
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Dành cho Lớp <span class="text-danger">*</span></label>
+                            <select name="grade" class="form-select" required>
+                                <option value="">-- Chọn lớp --</option>
+                                <option value="10">Lớp 10</option>
+                                <option value="11">Lớp 11</option>
+                                <option value="12">Lớp 12</option>
+                            </select>
+                        </div>
+
                         <div class="mb-3">
                             <label class="form-label fw-bold">Chủ đề <span class="text-danger">*</span></label>
                             <select name="topic_id" class="form-select" required>
+                                <option value="">-- Chọn chủ đề --</option>
                                 @foreach($topics as $topic)
                                     <option value="{{ $topic->id }}">{{ $topic->name }}</option>
                                 @endforeach

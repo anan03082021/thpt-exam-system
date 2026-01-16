@@ -84,9 +84,19 @@
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle d-flex align-items-center gap-2" href="#" data-bs-toggle="dropdown">
-                            <div class="avatar-circle">
-                                {{ substr(Auth::user()->name ?? 'U', 0, 1) }}
-                            </div>
+                            {{-- LOGIC HIỂN THỊ AVATAR (Bootstrap) --}}
+@if(Auth::user()->avatar)
+    {{-- Nếu có ảnh: Hiển thị ảnh --}}
+    <img src="/storage/{{ Str::replace('public/', '', Auth::user()->avatar) }}" 
+         alt="{{ Auth::user()->name }}" 
+         class="rounded-circle border border-white shadow-sm"
+         style="width: 32px; height: 32px; object-fit: cover;">
+@else
+    {{-- Nếu chưa có ảnh: Giữ nguyên vòng tròn chữ cái cũ --}}
+    <div class="avatar-circle">
+        {{ substr(Auth::user()->name ?? 'U', 0, 1) }}
+    </div>
+@endif
                             <span>{{ Auth::user()->name ?? 'Học sinh' }}</span>
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end border-0 shadow-lg">

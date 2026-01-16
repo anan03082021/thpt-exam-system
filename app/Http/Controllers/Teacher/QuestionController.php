@@ -73,7 +73,7 @@ class QuestionController extends Controller
                 'content' => $request->content,
                 'topic_id' => $request->topic_id,
                 'grade' => $request->grade,
-                'orientation' => $request->orientation,
+                'orientation' => strtolower($request->orientation),
                 'competency_id' => $request->competency_id,
                 
                 // [MỚI] Lưu dữ liệu Yêu cầu cần đạt & Nội dung trọng tâm
@@ -266,7 +266,7 @@ class QuestionController extends Controller
                 'content' => $request->content,
                 'topic_id' => $request->topic_id,
                 'grade' => $request->grade,
-                'orientation' => $request->orientation,
+                'orientation' => strtolower($request->orientation),
                 'competency_id' => $request->competency_id,
                 'cognitive_level_id' => ($question->type == 'single_choice') ? $request->cognitive_level_id : null,
                 

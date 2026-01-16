@@ -8,14 +8,14 @@ use App\Models\Question;
 use App\Models\Exam;
 use App\Models\ExamSession;
 use App\Models\ExamAttempt;
-use App\Models\User; // [MỚI] Thêm dòng này để đếm số học sinh
+use App\Models\User;
 use Carbon\Carbon;
 
 class DashboardController extends Controller
 {
     /**
-     * HÀM ĐIỀU HƯỚNG CHÍNH
-     * Route: /dashboard
+     * HÀM ĐIỀU HƯỚNG CHÍNH (Route: /dashboard)
+     * Tự động chuyển hướng dựa trên vai trò (Role)
      */
     public function index()
     {
@@ -31,13 +31,13 @@ class DashboardController extends Controller
     }
 
     /**
-     * DASHBOARD CHO GIÁO VIÊN
+     * DASHBOARD CHO GIÁO VIÊN / ADMIN
      */
     public function teacherDashboard()
     {
         $userId = Auth::id();
 
-        // 1. Thống kê số liệu
+        // 1. Thống kê số liệu tổng quan
         // Đếm đề thi do CHÍNH giáo viên này tạo
         $totalExams = Exam::where('creator_id', $userId)->count();
         
@@ -47,15 +47,30 @@ class DashboardController extends Controller
         // Đếm số học sinh (Toàn hệ thống)
         $totalStudents = User::where('role', 'student')->count();
 
-        // 2. Lấy danh sách 5 đề thi mới nhất CỦA GIÁO VIÊN NÀY
-        // Dùng take(5)->get() thay vì paginate() vì dashboard chỉ cần hiện list ngắn gọn
+        // [MỚI] Đếm tổng số Ca thi đã tạo (Cần thiết cho giao diện mới)
+        $totalSessions = ExamSession::count(); 
+
+        // 2. Lấy danh sách 5 ca thi mới nhất để hiển thị widget
+        $recentSessions = ExamSession::with('exam')
+                                     ->orderBy('created_at', 'desc')
+                                     ->take(5)
+                                     ->get();
+        
+        // (Tùy chọn) Lấy 5 đề thi mới nhất của giáo viên (nếu giao diện cần)
         $recentExams = Exam::where('creator_id', $userId)
                            ->latest()
                            ->take(5)
                            ->get();
 
-        // Trả về View với tên biến khớp với file blade 'teacher/dashboard.blade.php'
-        return view('teacher.dashboard', compact('totalExams', 'totalQuestions', 'totalStudents', 'recentExams'));
+        // Trả về View với đầy đủ dữ liệu
+        return view('teacher.dashboard', compact(
+            'totalExams', 
+            'totalQuestions', 
+            'totalStudents', 
+            'totalSessions', // <-- Biến này quan trọng cho giao diện Admin mới
+            'recentSessions',
+            'recentExams'
+        ));
     }
 
     /**
@@ -63,9 +78,9 @@ class DashboardController extends Controller
      */
     public function studentDashboard()
     {
-        // Lấy danh sách kỳ thi chính thức đang mở
+        // Lấy danh sách kỳ thi chính thức đang mở (chưa hết hạn)
         $officialSessions = ExamSession::with('exam')
-            ->where('end_at', '>', now()) // Chưa hết hạn
+            ->where('end_at', '>', now()) 
             ->orderBy('created_at', 'desc')
             ->get();
 
@@ -73,7 +88,7 @@ class DashboardController extends Controller
     }
 
     // ---------------------------------------------------------
-    // CÁC HÀM KHÁC (Giữ nguyên logic cũ của bạn)
+    // CÁC HÀM KHÁC (GIỮ NGUYÊN NHƯ CŨ)
     // ---------------------------------------------------------
 
     public function practiceList()
@@ -91,7 +106,7 @@ class DashboardController extends Controller
     {
         $userId = Auth::id();
 
-        // 1. Lấy dữ liệu gốc
+        // 1. Lấy dữ liệu lịch sử làm bài
         $attempts = ExamAttempt::with(['exam', 'examSession'])
             ->where('user_id', $userId)
             ->orderBy('submitted_at', 'asc')
@@ -107,7 +122,7 @@ class DashboardController extends Controller
             return empty($item->exam_session_id) || $item->exam_session_id == 0;
         });
 
-        // 4. Gom nhóm luyện tập
+        // 4. Xử lý dữ liệu luyện tập để vẽ biểu đồ
         $practiceHistory = [];
         $chartDataByExam = [];
         $grouped = $rawPracticeAttempts->groupBy('exam_id');
@@ -139,7 +154,7 @@ class DashboardController extends Controller
             }
         }
 
-        // 5. Thống kê biểu đồ
+        // 5. Thống kê tổng quan
         $totalExamsAvailable = Exam::count();
         $examsTakenCount = $grouped->count();
 

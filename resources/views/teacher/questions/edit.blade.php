@@ -45,10 +45,10 @@
                     <div class="col-md-3">
                         <label class="form-label fw-bold">Định hướng <span class="text-danger">*</span></label>
                         <select name="orientation" class="form-select" required>
-                            <option value="chung" {{ $question->orientation == 'chung' ? 'selected' : '' }}>Chung</option>
-                            <option value="ict" {{ $question->orientation == 'ict' ? 'selected' : '' }}>ICT</option>
-                            <option value="cs" {{ $question->orientation == 'cs' ? 'selected' : '' }}>CS</option>
-                        </select>
+    <option value="chung" {{ strtolower($question->orientation) == 'chung' ? 'selected' : '' }}>Chung (Bắt buộc)</option>
+    <option value="cs" {{ strtolower($question->orientation) == 'cs' ? 'selected' : '' }}>Khoa học máy tính (CS)</option>
+    <option value="ict" {{ strtolower($question->orientation) == 'ict' ? 'selected' : '' }}>Tin học ứng dụng (ICT)</option>
+</select>
                     </div>
                     <div class="col-md-6">
                         <label class="form-label fw-bold">Chủ đề <span class="text-danger">*</span></label>

@@ -10,6 +10,7 @@ use App\Models\AttemptAnswer;
 use App\Models\ExamSession;
 use App\Models\Answer;
 use App\Models\Exam;
+use App\Models\Question;
 
 class ExamController extends Controller
 {
@@ -20,11 +21,12 @@ class ExamController extends Controller
         $this->examService = $examService;
     }
 
+    // =========================================================================
     // 1. VÀO LÀM BÀI (CHECK CA THI & MẬT KHẨU)
-    // Route: /exam/take/{sessionId}
+    // =========================================================================
     public function takeExam($sessionId)
     {
-        // A. Lấy thông tin Ca thi
+        // A. Lấy thông tin Ca thi & Câu hỏi
         $session = ExamSession::with(['exam.questions' => function($q) {
             $q->whereNull('parent_id')
               ->with(['answers', 'children.answers']);
@@ -32,97 +34,150 @@ class ExamController extends Controller
 
         // B. Validate: Kiểm tra thời gian
         $now = now();
-        if ($now < $session->start_at) {
-            return redirect()->route('student.dashboard')->with('error', 'Chưa đến giờ làm bài!');
-        }
-        if ($now > $session->end_at) {
-            return redirect()->route('student.dashboard')->with('error', 'Đã hết giờ làm bài!');
+        // Nếu là luyện tập (id=0) thì bỏ qua check giờ
+        if ($sessionId != 0) {
+            if ($now < $session->start_at) {
+                return redirect()->route('dashboard')->with('error', 'Chưa đến giờ làm bài! Hãy quay lại lúc ' . $session->start_at->format('H:i d/m/Y'));
+            }
+            if ($now > $session->end_at) {
+                return redirect()->route('dashboard')->with('error', 'Đã hết giờ làm bài!');
+            }
         }
 
-        // --- LOGIC MỚI BẮT ĐẦU TỪ ĐÂY ---
-
-        // C. Kiểm tra quyền truy cập
+        // --- LOGIC KIỂM TRA QUYỀN ---
         $userEmail = Auth::user()->email;
-
-        // 1. Check Whitelist: Có trong danh sách được chỉ định không?
         $isWhitelisted = $session->students()->where('student_email', $userEmail)->exists();
-
-        // 2. Check Session Password: Đã nhập đúng mật khẩu trước đó chưa?
-        // (Kiểm tra xem trong session trình duyệt có lưu key 'exam_access_ID' không)
         $sessionKey = 'exam_access_' . $sessionId;
         $hasAccessByPassword = session()->has($sessionKey);
 
-        // D. Quyết định cho vào hay chặn
-        if ($isWhitelisted || $hasAccessByPassword) {
-            // -> ĐƯỢC PHÉP VÀO THI
+        // Cho phép nếu có trong danh sách, hoặc đã nhập mật khẩu, hoặc là bài luyện tập (id=0)
+        if ($isWhitelisted || $hasAccessByPassword || $sessionId == 0) {
             $exam = $session->exam;
-            return view('exam.take', compact('exam', 'session'));
+
+            // [QUAN TRỌNG] --- PHÂN LOẠI CÂU HỎI VỚI LOGIC CHẶT CHẼ (TRIM + LOWERCASE) ---
+            $allQuestions = $exam->questions;
+
+            $chungQuestions = $allQuestions->filter(function($q) {
+                // Chuẩn hóa: Cắt khoảng trắng, chuyển về chữ thường
+                $val = strtolower(trim($q->orientation ?? '')); 
+                // Chấp nhận: 'chung', rỗng, hoặc null
+                return $val === 'chung' || $val === '';
+            });
+
+            $csQuestions = $allQuestions->filter(function($q) {
+                $val = strtolower(trim($q->orientation ?? ''));
+                return $val === 'cs';
+            });
+
+            $ictQuestions = $allQuestions->filter(function($q) {
+                $val = strtolower(trim($q->orientation ?? ''));
+                return $val === 'ict';
+            });
+
+            return view('exam.take', compact('exam', 'session', 'chungQuestions', 'csQuestions', 'ictQuestions'));
         }
 
-        // E. Nếu chưa được vào, nhưng kỳ thi có mật khẩu -> Hiện form nhập pass
+        // E. Form nhập mật khẩu
         if (!empty($session->password)) {
             return view('exam.password_check', compact('session'));
         }
 
-        // F. Không có tên, không có pass -> Chặn
-        return redirect()->route('student.dashboard')->with('error', 'Bạn không có quyền tham gia kỳ thi này!');
+        // F. Chặn
+        return redirect()->route('dashboard')->with('error', 'Bạn không có quyền tham gia kỳ thi này.');
     }
 
-    // 2. XỬ LÝ NHẬP MẬT KHẨU (MỚI THÊM)
-    // Route: /exam/join/{sessionId} (POST)
+    // =========================================================================
+    // 2. XỬ LÝ NHẬP MẬT KHẨU
+    // =========================================================================
     public function joinWithPassword(Request $request, $sessionId)
     {
         $session = ExamSession::findOrFail($sessionId);
-
-        // Kiểm tra mật khẩu user nhập có khớp với database không
         if ($request->password === $session->password) {
-            // THÀNH CÔNG: Lưu cờ vào session để lần sau không hỏi lại
             session(['exam_access_' . $sessionId => true]);
-            
-            // Chuyển hướng lại trang làm bài (Lúc này logic ở takeExam sẽ cho qua)
             return redirect()->route('exam.take', $sessionId);
         }
-
-        // THẤT BẠI: Quay lại báo lỗi
         return redirect()->back()->with('error', 'Mật khẩu kỳ thi không đúng!');
     }
 
-    // 3. XỬ LÝ NỘP BÀI
-    // Route: /exam/submit/{sessionId}
-public function submitExam(Request $request, $sessionId)
+    // =========================================================================
+    // 3. XỬ LÝ NỘP BÀI (LOGIC QUAN TRỌNG NHẤT - ĐÃ UPDATE)
+    // =========================================================================
+    public function submitExam(Request $request, $sessionId)
     {
-        // 1. KHAI BÁO BIẾN $isPractice NGAY ĐẦU HÀM
         $isPractice = ($sessionId == 0); 
 
-        // TRƯỜNG HỢP 1: LUYỆN TẬP
+        // 1. Lấy lựa chọn của học sinh và chuẩn hóa
+        $rawElective = $request->input('selected_elective');
+        $selectedElective = strtolower(trim($rawElective ?? ''));
+
+        // Validate: Nếu là thi chính thức và có phần tự chọn, bắt buộc phải chọn
+        // Kiểm tra xem đề có phần tự chọn không (dựa vào request gửi lên có câu hỏi phần riêng không)
+        // Tuy nhiên đơn giản nhất là check input selected_elective
+        if (!$isPractice && !in_array($selectedElective, ['cs', 'ict'])) {
+            // Có thể đề chỉ có phần chung, lúc đó selected_elective sẽ rỗng. 
+            // Nếu đề có phân ban mà selected_elective rỗng -> Chặn.
+            // Để an toàn, ta tạm bỏ qua validate cứng ở đây nếu đề thuần Chung, 
+            // nhưng Frontend đã ép buộc chọn rồi.
+        }
+
+        // 2. Xử lý thông tin kỳ thi
         if ($isPractice) {
             $examId = $request->exam_id_hidden;
-        } 
-        // TRƯỜNG HỢP 2: THI CHÍNH THỨC
-        else {
+        } else {
             $session = ExamSession::findOrFail($sessionId);
             $examId = $session->exam_id;
-
-            // Kiểm tra thời gian nộp bài
+            // Cho phép trễ 2 phút do độ trễ mạng
             if (now() > $session->end_at->addMinutes(2)) {
                 return redirect()->route('dashboard')->with('error', 'Quá giờ nộp bài!');
             }
         }
 
-        // ... (Phần tạo Attempt và lưu câu trả lời giữ nguyên) ...
+        // 3. Tạo lượt thi (Attempt)
         $attempt = ExamAttempt::create([
             'user_id' => Auth::id(),
             'exam_id' => $examId,
             'exam_session_id' => $sessionId, 
-            'started_at' => now(),
+            'started_at' => now(), // Lý tưởng là lấy từ session lúc start
             'submitted_at' => now(),
-            'total_score' => 0
+            'total_score' => 0,
+            // Nếu bạn đã thêm cột này vào DB thì bỏ comment dòng dưới:
+            // 'selected_elective' => $selectedElective 
         ]);
 
+        // 4. Lưu câu trả lời (CÓ LỌC)
         if ($request->has('answers')) {
             foreach ($request->answers as $questionId => $answerId) {
-                $answer = Answer::find($answerId);
-                if ($answer) {  
+                // Load question để kiểm tra orientation
+                $answer = Answer::with('question')->find($answerId);
+                
+                if ($answer) {
+                    $question = $answer->question;
+                    // Chuẩn hóa orientation của câu hỏi
+                    $qOri = strtolower(trim($question->orientation ?? ''));
+                    if ($qOri === '') $qOri = 'chung';
+
+                    // --- LOGIC QUYẾT ĐỊNH CÓ LƯU HAY KHÔNG ---
+                    $shouldSave = false;
+
+                    // Luôn lưu phần Chung
+                    if ($qOri === 'chung') {
+                        $shouldSave = true;
+                    }
+                    // Nếu là bài Luyện tập -> Lưu hết (để học sinh xem lại)
+                    elseif ($isPractice) {
+                        $shouldSave = true; 
+                    }
+                    // Nếu là Thi thật -> CHỈ LƯU phần khớp với lựa chọn
+                    elseif ($qOri === $selectedElective) {
+                        $shouldSave = true;
+                    }
+
+                    // Nếu không thỏa mãn -> Bỏ qua (Continue)
+                    if (!$shouldSave) {
+                        continue; 
+                    }
+
+                    // Lưu vào DB
                     AttemptAnswer::create([
                         'attempt_id' => $attempt->id,
                         'question_id' => $questionId,
@@ -133,39 +188,56 @@ public function submitExam(Request $request, $sessionId)
             }
         }
 
-        // Tính điểm
+        // 5. Tính điểm
         $this->examService->calculateScore($attempt->id);
 
-        // 4. CHUYỂN HƯỚNG SỬ DỤNG BIẾN $isPractice
+        // Xóa session lựa chọn để lần sau thi lại (nếu có) được chọn lại
+        session()->forget('elective_choice_' . $sessionId);
+
         if ($isPractice) {
             return redirect()->route('student.exam.result.practice', $attempt->id);
         } else {
             return redirect()->route('student.exam.result.official', $attempt->id);
         }
     }
-    // 4. XEM KẾT QUẢ
-    // Route: /exam/result/{attemptId}
 
-
-    // 5. BẮT ĐẦU LUYỆN TẬP
+    // =========================================================================
+    // 4. BẮT ĐẦU LUYỆN TẬP
+    // =========================================================================
     public function startPractice($examId)
     {
         $exam = Exam::with(['questions' => function($q) {
             $q->whereNull('parent_id')->with(['answers', 'children.answers']);
         }])->findOrFail($examId);
 
+        // Tạo session giả lập
         $session = new ExamSession();
         $session->id = 0; 
         $session->title = "Luyện tập: " . $exam->title;
         $session->exam_id = $exam->id;
-        
         $session->start_at = now();
         $session->end_at = now()->addMinutes($exam->duration);
 
-        return view('exam.take', compact('exam', 'session'));
+        // Tái sử dụng logic phân loại
+        $allQuestions = $exam->questions;
+        
+        $chungQuestions = $allQuestions->filter(function($q) {
+            $val = strtolower(trim($q->orientation ?? ''));
+            return $val === 'chung' || $val === '';
+        });
+        $csQuestions = $allQuestions->filter(function($q) {
+            return strtolower(trim($q->orientation ?? '')) === 'cs';
+        });
+        $ictQuestions = $allQuestions->filter(function($q) {
+            return strtolower(trim($q->orientation ?? '')) === 'ict';
+        });
+
+        return view('exam.take', compact('exam', 'session', 'chungQuestions', 'csQuestions', 'ictQuestions'));
     }
 
-    // 6. LỊCH SỬ THI
+    // =========================================================================
+    // 5. LỊCH SỬ THI
+    // =========================================================================
     public function history()
     {
         $attempts = ExamAttempt::with(['exam', 'examSession'])
@@ -183,97 +255,106 @@ public function submitExam(Request $request, $sessionId)
 
         return view('history', compact('examAttempts', 'practiceAttempts'));
     }
-    // --- [MỚI] HÀM HIỂN THỊ KẾT QUẢ KỲ THI CHÍNH THỨC ---
-// Mở file App\Http\Controllers\Student\ExamController.php
 
-public function showOfficialResult($id)
-{
-    $userId = Auth::id();
+    // =========================================================================
+    // 6. HIỂN THỊ KẾT QUẢ KỲ THI CHÍNH THỨC
+    // =========================================================================
+    public function showOfficialResult($id)
+    {
+        $userId = Auth::id();
 
-    // 1. Load thật kỹ các quan hệ để View không bị lỗi
-    $attempt = ExamAttempt::with([
-        'examSession',
-        'attemptAnswers.selectedAnswer',
-        // Load quan hệ cho câu hỏi đơn
-        'attemptAnswers.question.answers', 
-        'attemptAnswers.question.topic',
-        'attemptAnswers.question.coreContent', 
-        'attemptAnswers.question.learningObjective',
-        // Load quan hệ cho câu hỏi cha (nếu là câu hỏi chùm)
-        'attemptAnswers.question.parent.topic',
-        'attemptAnswers.question.parent.coreContent',
-        'attemptAnswers.question.parent.learningObjective',
-        'attemptAnswers.question.parent.answers' // Load đáp án của câu cha nếu cần
-    ])
-    ->where('user_id', $userId)
-    ->findOrFail($id);
+        $attempt = ExamAttempt::with([
+            'examSession',
+            'attemptAnswers.selectedAnswer',
+            'attemptAnswers.question.answers', 
+            'attemptAnswers.question.topic',
+            // Load các quan hệ khác...
+        ])
+        ->where('user_id', $userId)
+        ->findOrFail($id);
 
-    // 2. Logic NHÓM CÂU HỎI (Quan trọng để dùng được code của bạn)
-    // Nếu câu hỏi có cha (parent_id), nhóm theo ID cha. Nếu không, nhóm theo ID chính nó.
-    $groupedQuestions = $attempt->attemptAnswers->groupBy(function ($ans) {
-        return $ans->question->parent_id ?? $ans->question->id;
-    });
+        // Nhóm câu trả lời theo câu hỏi cha (cho dạng chùm)
+        $groupedQuestions = $attempt->attemptAnswers->groupBy(function ($ans) {
+            return $ans->question->parent_id ?? $ans->question->id;
+        });
 
-    // 3. Các logic tính toán thống kê (Giữ nguyên)
-    $sessionId = $attempt->exam_session_id;
-    if ($sessionId) {
-        $averageScore = ExamAttempt::where('exam_session_id', $sessionId)->avg('total_score');
-        $maxScore = ExamAttempt::where('exam_session_id', $sessionId)->max('total_score');
-        $beatCount = ExamAttempt::where('exam_session_id', $sessionId)
-            ->where('total_score', '<', $attempt->total_score)
-            ->count();
-    } else {
+        // Thống kê điểm số so với lớp
+        $sessionId = $attempt->exam_session_id;
         $averageScore = 0; $maxScore = 0; $beatCount = 0;
+
+        if ($sessionId) {
+            $averageScore = ExamAttempt::where('exam_session_id', $sessionId)->avg('total_score');
+            $maxScore = ExamAttempt::where('exam_session_id', $sessionId)->max('total_score');
+            $beatCount = ExamAttempt::where('exam_session_id', $sessionId)
+                ->where('total_score', '<', $attempt->total_score)
+                ->count();
+        }
+
+        // [MỚI] Xác định người dùng đã chọn môn nào dựa trên các câu đã trả lời
+        // Để hiển thị badge hoặc lọc thêm nếu cần
+        $detectedElective = null;
+        foreach($attempt->attemptAnswers as $ans) {
+            $ori = strtolower(trim($ans->question->orientation ?? ''));
+            if ($ori === 'cs') { $detectedElective = 'cs'; break; }
+            if ($ori === 'ict') { $detectedElective = 'ict'; break; }
+        }
+
+        return view('exam.result_official', compact(
+            'attempt', 'groupedQuestions', 'averageScore', 'maxScore', 'beatCount', 'detectedElective'
+        ));
     }
 
-    // 4. Truyền biến $groupedQuestions sang View
-    return view('exam.result_official', compact(
-        'attempt', 
-        'groupedQuestions', // <--- Biến mới quan trọng
-        'averageScore', 
-        'maxScore', 
-        'beatCount'
-    ));
-}
-
-    // --- [MỚI] HÀM HIỂN THỊ KẾT QUẢ LUYỆN TẬP ---
-// THÊM LẠI HÀM NÀY VÀO CUỐI CLASS
-public function showResult($attemptId)
-{
-    // Lấy chi tiết bài làm kèm theo các quan hệ cần thiết
-    $attemptDetail = ExamAttempt::with([
-        'exam',
-        'attemptAnswers.question.topic',
-        'attemptAnswers.question.answers',
-        'attemptAnswers.question.parent',
-        'attemptAnswers.selectedAnswer'
-    ])
-    ->where('id', $attemptId)
-    ->where('user_id', Auth::id())
-    ->firstOrFail();
-
-    $exam = $attemptDetail->exam;
-    $score = $attemptDetail->total_score;
-    
-    // Logic gợi ý ôn tập (nếu bạn có service này)
-    $suggestions = $this->examService->getReviewSuggestions($attemptDetail->id);
-
-    // Lấy dữ liệu vẽ biểu đồ lịch sử (Code cũ của bạn)
-    $historyAttempts = ExamAttempt::where('exam_id', $attemptDetail->exam_id)
+    // =========================================================================
+    // 7. HIỂN THỊ KẾT QUẢ LUYỆN TẬP
+    // =========================================================================
+    public function showResult($attemptId)
+    {
+        $attemptDetail = ExamAttempt::with([
+            'exam',
+            'attemptAnswers.question.topic',
+            'attemptAnswers.question.answers',
+            'attemptAnswers.question.parent',
+            'attemptAnswers.selectedAnswer'
+        ])
+        ->where('id', $attemptId)
         ->where('user_id', Auth::id())
-        ->whereNotNull('submitted_at')
-        ->orderBy('submitted_at', 'asc')
-        ->get();
+        ->firstOrFail();
 
-    $chartData = $historyAttempts->map(function ($item) use ($attemptDetail) {
-        return [
-            'date' => \Carbon\Carbon::parse($item->submitted_at)->format('d/m H:i'),
-            'score' => $item->total_score,
-            'is_current' => $item->id == $attemptDetail->id 
-        ];
-    })->values();
+        $exam = $attemptDetail->exam;
+        $score = $attemptDetail->total_score;
+        
+        $suggestions = $this->examService->getReviewSuggestions($attemptDetail->id);
 
-    // Trả về view cũ: exam.result
-    return view('exam.result', compact('attemptDetail', 'exam', 'score', 'suggestions', 'chartData'));
-}
+        // Biểu đồ lịch sử
+        $historyAttempts = ExamAttempt::where('exam_id', $attemptDetail->exam_id)
+            ->where('user_id', Auth::id())
+            ->whereNotNull('submitted_at')
+            ->orderBy('submitted_at', 'asc')
+            ->get();
+
+        $chartData = $historyAttempts->map(function ($item) use ($attemptDetail) {
+            return [
+                'date' => \Carbon\Carbon::parse($item->submitted_at)->format('d/m H:i'),
+                'score' => $item->total_score,
+                'is_current' => $item->id == $attemptDetail->id 
+            ];
+        })->values();
+
+        return view('exam.result', compact('attemptDetail', 'exam', 'score', 'suggestions', 'chartData'));
+    }
+
+    // =========================================================================
+    // 8. API LƯU TRẠNG THÁI CHỌN MÔN (CHO JS GỌI)
+    // =========================================================================
+    public function saveElective(Request $request, $sessionId)
+    {
+        $request->validate([
+            'elective' => 'required|in:cs,ict'
+        ]);
+
+        // Lưu vào Session
+        session(['elective_choice_' . $sessionId => $request->elective]);
+
+        return response()->json(['success' => true]);
+    }
 }

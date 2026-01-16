@@ -9,6 +9,10 @@ use App\Models\AttemptAnswer;
 class ExamAttempt extends Model
 {
     use HasFactory;
+    protected $casts = [
+        'started_at' => 'datetime',
+        'submitted_at' => 'datetime', // Dòng này giúp Laravel hiểu đây là ngày tháng
+    ];
 
     protected $fillable = [
         'user_id', 

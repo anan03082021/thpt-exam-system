@@ -15,7 +15,6 @@
 </li>
 
 {{-- 3. Quản lý đề thi --}}
-{{-- Lưu ý: Menu nên trỏ về danh sách (index) thay vì trang tạo (create) --}}
 <li class="nav-item">
     <a class="nav-link {{ request()->routeIs('teacher.exams.*') ? 'active' : '' }}" 
        href="{{ route('teacher.exams.index') }}">
@@ -28,5 +27,13 @@
     <a class="nav-link {{ request()->routeIs('teacher.sessions.*') ? 'active' : '' }}" 
        href="{{ route('teacher.sessions.index') }}">
         <i class="bi bi-calendar-check"></i> {{ __('Tổ chức thi') }}
+    </a>
+</li>
+
+{{-- 5. Quản lý tài liệu (MỚI THÊM) --}}
+<li class="nav-item">
+    <a class="nav-link {{ request()->routeIs('teacher.documents.*') ? 'active' : '' }}" 
+       href="{{ route('teacher.documents.index') }}">
+        <i class="bi bi-folder2-open"></i> {{ __('Kho tài liệu') }}
     </a>
 </li>

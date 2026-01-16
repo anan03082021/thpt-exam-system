@@ -4,11 +4,13 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use App\Models\Question; // Đảm bảo import Model Question
+
 
 class Exam extends Model
 {
-    use HasFactory;
+    use HasFactory, SoftDeletes;
 
     // --- BỔ SUNG ĐOẠN NÀY ĐỂ SỬA LỖI ---
     protected $fillable = [

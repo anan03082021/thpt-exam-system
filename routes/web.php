@@ -2,12 +2,13 @@
 
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Artisan; // Thêm dòng này để sửa lỗi Artisan ở cuối file
 use App\Http\Controllers\ProfileController;
 
 // 1. Controller chung
 use App\Http\Controllers\DashboardController;
 
-// 2. Controller cho Học sinh (SỬA Ở ĐÂY: Dùng Alias để trỏ đúng vào thư mục Student)
+// 2. Controller cho Học sinh
 use App\Http\Controllers\ExamController as StudentExamController; 
 use App\Http\Controllers\Student\HistoryController;
 
@@ -15,6 +16,7 @@ use App\Http\Controllers\Student\HistoryController;
 use App\Http\Controllers\Teacher\QuestionController;
 use App\Http\Controllers\Teacher\ExamController as TeacherExamController; 
 use App\Http\Controllers\Teacher\ExamSessionController;
+use App\Http\Controllers\Teacher\DocumentController; // [THÊM MỚI] Import Controller Tài liệu
 use App\Http\Controllers\Admin\UserController;
 
 /*
@@ -50,8 +52,7 @@ Route::prefix('teacher')
         // 2. Quản lý Ngân hàng câu hỏi
         Route::resource('questions', QuestionController::class);
         Route::post('/questions/store-quick', [QuestionController::class, 'storeQuick'])->name('questions.store_quick');
-        Route::post('/questions/upload-image', [App\Http\Controllers\Teacher\QuestionController::class, 'uploadImage'])
-            ->name('questions.upload_image');
+        Route::post('/questions/upload-image', [QuestionController::class, 'uploadImage'])->name('questions.upload_image');
 
         // 3. Quản lý Đề thi
         Route::get('/exams', [TeacherExamController::class, 'index'])->name('exams.index'); 
@@ -74,11 +75,9 @@ Route::prefix('teacher')
         Route::get('/sessions/{id}/export', [ExamSessionController::class, 'export'])->name('sessions.export');
         Route::delete('/sessions/{id}', [ExamSessionController::class, 'destroy'])->name('sessions.destroy');
 
-        // 5. Quản lý tài liệu
-        Route::get('/documents', [App\Http\Controllers\Teacher\DocumentController::class, 'index'])->name('documents.index');
-        Route::post('/documents', [App\Http\Controllers\Teacher\DocumentController::class, 'store'])->name('documents.store');
-        Route::delete('/documents/{id}', [App\Http\Controllers\Teacher\DocumentController::class, 'destroy'])->name('documents.destroy');
-        Route::get('/documents/{id}/download', [App\Http\Controllers\Teacher\DocumentController::class, 'download'])->name('documents.download');
+        // 5. Quản lý tài liệu [CẬP NHẬT: Dùng Resource cho gọn]
+        // Tự động tạo các route: index, create, store, destroy...
+        Route::resource('documents', DocumentController::class); 
     });
 
 /*
@@ -92,7 +91,9 @@ Route::middleware(['auth', 'verified', 'role:student'])->group(function () {
     // 1. Dashboard & Các trang chính
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/practice', [DashboardController::class, 'practiceList'])->name('student.practice');
-    Route::get('/documents', [DashboardController::class, 'documents'])->name('student.documents');
+    
+    // [QUAN TRỌNG] Sửa route này trỏ về DocumentController method library
+    Route::get('/documents', [DocumentController::class, 'library'])->name('student.documents');
 
     // Route Tiến độ học tập
     Route::get('/history', [HistoryController::class, 'index'])->name('student.history');
@@ -102,23 +103,18 @@ Route::middleware(['auth', 'verified', 'role:student'])->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
-    // 3. QUY TRÌNH LÀM BÀI THI (SỬA LẠI: Dùng StudentExamController)
+    // 3. QUY TRÌNH LÀM BÀI THI
     Route::get('/exam/take/{sessionId}', [StudentExamController::class, 'takeExam'])->name('exam.take');
     Route::post('/exam/join/{sessionId}', [StudentExamController::class, 'joinWithPassword'])->name('exam.join_password');
     Route::post('/exam/submit/{sessionId}', [StudentExamController::class, 'submitExam'])->name('exam.submit');
+    Route::post('/exam/save-elective/{sessionId}', [App\Http\Controllers\ExamController::class, 'saveElective'])->name('exam.saveElective');
     
     // Bắt đầu làm bài luyện tập
     Route::get('/practice/start/{examId}', [StudentExamController::class, 'startPractice'])->name('exam.practice');
 
-    // --- TÁCH ROUTE XEM KẾT QUẢ ---
-    
-    // 3.1. Kết quả KỲ THI CHÍNH THỨC
-    Route::get('/exam/result/official/{id}', [StudentExamController::class, 'showOfficialResult'])
-        ->name('student.exam.result.official');
-
-    // 3.2. Kết quả LUYỆN TẬP
-    Route::get('/exam/result/practice/{id}', [StudentExamController::class, 'showResult'])
-        ->name('student.exam.result.practice');
+    // --- KẾT QUẢ ---
+    Route::get('/exam/result/official/{id}', [StudentExamController::class, 'showOfficialResult'])->name('student.exam.result.official');
+    Route::get('/exam/result/practice/{id}', [StudentExamController::class, 'showResult'])->name('student.exam.result.practice');
     
 });
 
@@ -137,3 +133,30 @@ Route::prefix('admin')
 
         Route::resource('users', UserController::class);
     });
+
+/*
+|--------------------------------------------------------------------------
+| DIỄN ĐÀN & THẢO LUẬN
+|--------------------------------------------------------------------------
+*/
+Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('/forum', [App\Http\Controllers\ChatController::class, 'index'])->name('forum.index');
+    Route::get('/forum/messages', [App\Http\Controllers\ChatController::class, 'fetchMessages'])->name('forum.fetch');
+    Route::post('/forum/send', [App\Http\Controllers\ChatController::class, 'sendMessage'])->name('forum.send');
+});
+
+// Route sửa lỗi Avatar (Giữ nguyên nếu bạn cần debug)
+Route::get('/fix-avatar', function () {
+    Artisan::call('view:clear');
+    Artisan::call('cache:clear');
+    $user = Auth::user();
+    echo "<h1>Đang sửa lỗi hiển thị...</h1>";
+    echo "✅ Đã xóa Cache.<br>";
+    if ($user->avatar) {
+        echo "✅ DB có ảnh: <b>" . $user->avatar . "</b><br>";
+        echo "<img src='/storage/" . str_replace('public/', '', $user->avatar) . "' style='width:100px; height:100px;'>";
+    } else {
+        echo "❌ Chưa có ảnh.<br>";
+    }
+    echo "<br><a href='/dashboard'>[ QUAY VỀ ]</a>";
+});

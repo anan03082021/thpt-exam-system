@@ -1,284 +1,371 @@
 <x-app-layout>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     @push('styles')
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
-        /* CSS Điểm số */
-        .score-card { background: white; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); overflow: hidden; }
-        .score-circle { width: 150px; height: 150px; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; margin: 0 auto; color: white; box-shadow: 0 8px 20px rgba(0,0,0,0.15); border: 5px solid rgba(255,255,255,0.4); }
-        .bg-score-high { background: linear-gradient(135deg, #198754 0%, #20c997 100%); }
-        .bg-score-mid { background: linear-gradient(135deg, #ffc107 0%, #ffca2c 100%); }
-        .bg-score-low { background: linear-gradient(135deg, #dc3545 0%, #f06548 100%); }
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f8fafc; }
 
-        /* CSS Câu hỏi */
-        .question-content img { max-width: 100%; height: auto; border-radius: 8px; border: 1px solid #dee2e6; margin: 10px 0; }
-        .card-wrong { border-left: 5px solid #dc3545; background-color: #fff5f5; }
-        .card-correct { border-left: 5px solid #198754; background-color: #f8fffa; }
+        /* --- HERO CARD --- */
+        .hero-card {
+            background: linear-gradient(135deg, #0ea5e9 0%, #3b82f6 100%); /* Màu xanh dương sáng hơn cho Luyện tập */
+            border-radius: 24px; color: white; padding: 2.5rem;
+            position: relative; overflow: hidden;
+            box-shadow: 0 20px 40px -10px rgba(14, 165, 233, 0.4);
+            min-height: 320px;
+            display: flex; flex-direction: column; justify-content: center;
+        }
+        .hero-pattern {
+            position: absolute; top: 0; right: 0; width: 300px; height: 100%;
+            background: radial-gradient(circle, rgba(255,255,255,0.15) 0%, transparent 70%);
+            pointer-events: none;
+        }
+        .score-huge { font-size: 4.5rem; font-weight: 800; line-height: 1; letter-spacing: -2px; }
         
-        /* Table Đúng/Sai */
-        .tf-result-table th, .tf-result-table td { vertical-align: middle; }
-        .row-wrong { background-color: #ffe6e6 !important; }
-        .row-correct { background-color: #d1e7dd !important; }
-        
-        /* Đáp án trắc nghiệm */
-        .opt-item { border: 1px solid #e9ecef; border-radius: 8px; padding: 12px; margin-bottom: 8px; }
-        .opt-user-wrong { background-color: #ffe6e6; border-color: #dc3545; color: #b02a37; }
-        .opt-correct { background-color: #d1e7dd; border-color: #198754; color: #0f5132; }
-        .opt-user-correct { background-color: #d1e7dd; border-color: #198754; color: #0f5132; font-weight: bold; border-width: 2px; }
+        /* --- GLASS CARD --- */
+        .glass-card {
+            background: white; border-radius: 20px; border: 1px solid #e2e8f0;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); padding: 1.5rem; height: 100%;
+            display: flex; flex-direction: column; justify-content: center;
+        }
 
-        /* Gợi ý */
-        .hint-box { background-color: #fff3cd; border: 1px solid #ffecb5; color: #856404; border-radius: 8px; padding: 10px 15px; margin-top: 15px; font-size: 0.9rem; }
+        /* --- QUESTION ITEM --- */
+        .q-wrapper {
+            background: white; border-radius: 16px; margin-bottom: 2rem;
+            border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+            overflow: hidden;
+        }
+
+        /* Status Styles */
+        .status-wrong { border-left: 6px solid #ef4444; }
+        .bg-wrong-light { background-color: #fef2f2; }
+        .text-wrong { color: #ef4444; }
+
+        .status-correct { border-left: 6px solid #10b981; }
+        .bg-correct-light { background-color: #ecfdf5; }
+        .text-correct { color: #10b981; }
+
+        /* --- ANSWER BOX STYLES --- */
+        .ans-box {
+            padding: 12px 16px; border-radius: 10px; border: 1px solid #e2e8f0;
+            margin-bottom: 8px; background: #fff;
+            display: flex; align-items: center; justify-content: space-between;
+            font-weight: 500; color: #64748b; transition: all 0.2s;
+        }
+        .ans-normal { background: #fff; opacity: 0.7; }
+        .ans-user-correct { background: #dcfce7; border-color: #86efac; color: #166534; box-shadow: 0 2px 4px rgba(22, 101, 52, 0.1); }
+        .ans-user-wrong { background: #fee2e2; border-color: #fecaca; color: #991b1b; }
+        .ans-missed-correct { background: #fff; border: 2px solid #22c55e; color: #15803d; }
+
+        /* Tip Box */
+        .tip-box {
+            background: #fffbeb; border: 1px dashed #f59e0b; border-radius: 12px;
+            padding: 1rem 1.5rem; margin-top: 1.5rem; color: #92400e;
+            display: flex; align-items: start; gap: 1rem;
+        }
     </style>
     @endpush
 
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
     @php
-        $scoreValue = isset($score) && $score !== '' ? (float)$score : 0;
-        if($scoreValue >= 8) { $bgClass = 'bg-score-high'; $msg = 'Xuất sắc!'; }
-        elseif($scoreValue >= 5) { $bgClass = 'bg-score-mid'; $msg = 'Khá tốt!'; }
-        else { $bgClass = 'bg-score-low'; $msg = 'Cần cố gắng'; }
-
-        // Eager load thêm coreContent và learningObjective để hiển thị gợi ý
+        // Eager load dữ liệu cần thiết để tránh N+1 Query
         $rawAnswers = $attemptDetail->attemptAnswers->load(['question.parent', 'question.answers', 'question.topic', 'question.coreContent', 'question.learningObjective']);
 
         $groupedQuestions = $rawAnswers->groupBy(function($ans) {
             return $ans->question->parent_id ?? $ans->question_id;
         });
 
-        $groupedQuestions = $groupedQuestions->sortBy(function($group) {
+        // Tự động phát hiện môn chọn (CS/ICT) để lọc
+        $userElective = null;
+        foreach($groupedQuestions as $group) {
+            $qOri = strtolower(trim($group->first()->question->orientation ?? ''));
+            if ($qOri === 'cs' || $qOri === 'ict') {
+                $userElective = $qOri;
+                break;
+            }
+        }
+
+        // SẮP XẾP: Câu SAI lên đầu
+        $sortedQuestions = $groupedQuestions->sortBy(function($group) {
             return $group->contains('is_correct', false) ? 0 : 1;
         });
-
-        $totalWrongGroups = $groupedQuestions->filter(fn($g) => $g->contains('is_correct', false))->count();
     @endphp
 
-    <div class="row g-4">
-        {{-- CỘT TRÁI: ĐIỂM SỐ --}}
-        <div class="col-lg-4">
-            <div class="score-card mb-4 pb-4 text-center">
-                <div class="pt-5 pb-3">
-                    <div class="score-circle {{ $bgClass }}">
-                        <span class="display-4 fw-bold">{{ number_format($scoreValue, 2) }}</span>
-                        <span class="small opacity-75">điểm</span>
-                    </div>
-                </div>
-                <h3 class="fw-bold {{ $scoreValue < 5 ? 'text-danger' : 'text-success' }}">{{ $msg }}</h3>
-                
-                <div class="row g-2 px-4 mt-3 mb-4">
-                    <div class="col-6">
-                        <div class="p-2 bg-danger bg-opacity-10 rounded text-danger fw-bold">
-                            {{ $totalWrongGroups }} câu/nhóm sai
-                        </div>
-                    </div>
-                    <div class="col-6">
-                        <div class="p-2 bg-success bg-opacity-10 rounded text-success fw-bold">
-                            {{ $groupedQuestions->count() - $totalWrongGroups }} câu/nhóm đúng
-                        </div>
-                    </div>
-                </div>
+    <div class="container py-4">
+        {{-- HEADER --}}
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <div class="text-uppercase text-muted fw-bold small tracking-wider mb-1">Kết quả Luyện tập</div>
+                <h3 class="fw-bold text-dark m-0">{{ $exam->title }}</h3>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="{{ route('student.history') }}" class="btn btn-white bg-white border fw-bold shadow-sm rounded-pill px-4">
+                    <i class="bi bi-clock-history me-2"></i> Lịch sử
+                </a>
+                {{-- Nút làm lại bài --}}
+                <a href="{{ route('exam.practice', $exam->id) }}" class="btn btn-primary fw-bold shadow-sm rounded-pill px-4">
+                    <i class="bi bi-arrow-repeat me-2"></i> Làm lại
+                </a>
+            </div>
+        </div>
 
-                <div class="d-grid gap-2 px-4">
-                    <a href="{{ route('exam.take', $attemptDetail->exam_session_id ?? 0) }}" class="btn btn-primary fw-bold shadow-sm">
-                        <i class="bi bi-arrow-repeat"></i> Làm lại bài
-                    </a>
-                    <a href="{{ route('dashboard') }}" class="btn btn-outline-secondary">Về trang chủ</a>
+        {{-- TOP SECTION: SCORE & AREA CHART --}}
+        <div class="row g-4 mb-5 justify-content-center">
+            
+            {{-- Cột Điểm Số (Hero) --}}
+            <div class="col-lg-5">
+                <div class="hero-card">
+                    <div class="hero-pattern"></div>
+                    <div class="text-white text-opacity-75 fw-bold text-uppercase small mb-2">Điểm lần thi này</div>
+                    <div class="d-flex align-items-baseline gap-3 mb-4">
+                        <div class="score-huge">{{ number_format($score, 2) }}</div>
+                        <div class="fs-4 text-white text-opacity-50">/ 10</div>
+                    </div>
+                    
+                    <div class="progress bg-white bg-opacity-20 rounded-pill mb-4" style="height: 8px;">
+                        <div class="progress-bar bg-white rounded-pill" role="progressbar" style="width: {{ $score * 10 }}%"></div>
+                    </div>
+
+                    {{-- Nhận xét ngắn --}}
+                    <div class="d-flex align-items-center gap-2 text-white">
+                        @if($score >= 8)
+                            <i class="bi bi-trophy-fill fs-5"></i> <span class="fw-bold">Làm rất tốt! Hãy duy trì phong độ.</span>
+                        @elseif($score >= 5)
+                            <i class="bi bi-emoji-smile-fill fs-5"></i> <span class="fw-bold">Đạt yêu cầu, nhưng cần cải thiện thêm.</span>
+                        @else
+                            <i class="bi bi-emoji-frown-fill fs-5"></i> <span class="fw-bold">Cần ôn tập kỹ hơn các kiến thức hổng.</span>
+                        @endif
+                    </div>
                 </div>
             </div>
 
-            {{-- Biểu đồ --}}
-            @if(isset($chartData) && count($chartData) > 1)
-                <div class="card border-0 shadow-sm rounded-4">
-                    <div class="card-body">
-                        <h6 class="fw-bold text-secondary mb-3">Tiến bộ học tập</h6>
-                        <canvas id="progressChart" height="200"></canvas>
+            {{-- Cột Biểu Đồ Miền (Area Chart) --}}
+            <div class="col-lg-auto">
+                <div class="glass-card p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h6 class="fw-bold text-dark m-0"><i class="bi bi-graph-up-arrow text-primary me-2"></i>Tiến bộ qua các lần thi</h6>
                     </div>
-                </div>
-            @endif
-        </div>
-
-        {{-- CỘT PHẢI: CHI TIẾT BÀI LÀM --}}
-        <div class="col-lg-8">
-            <h5 class="fw-bold text-primary mb-3"><i class="bi bi-journal-check me-2"></i> Chi tiết bài làm</h5>
-
-            @foreach($groupedQuestions as $groupId => $group)
-                @php
-                    $firstItem = $group->first();
-                    $mainQuestion = $firstItem->question->parent ?? $firstItem->question;
-                    $groupHasWrong = $group->contains('is_correct', false);
                     
-                    $cardClass = $groupHasWrong ? 'card-wrong' : 'card-correct';
-                    $badgeClass = $groupHasWrong ? 'bg-danger' : 'bg-success';
-                    $statusText = $groupHasWrong ? 'Có ý sai' : 'Đúng hoàn toàn';
-                    if ($mainQuestion->type == 'single_choice') {
-                        $statusText = $groupHasWrong ? 'Sai' : 'Đúng';
-                    }
-                @endphp
-
-                <div class="card shadow-sm mb-4 {{ $cardClass }}">
-                    <div class="card-body p-4">
-                        
-                        {{-- Header câu hỏi --}}
-                        <div class="d-flex justify-content-between align-items-start mb-3">
-                            <div>
-                                <span class="badge {{ $badgeClass }} mb-2">{{ $statusText }}</span>
-                                <span class="badge bg-light text-dark border">{{ $mainQuestion->topic->name ?? 'Tổng hợp' }}</span>
-                            </div>
-                            <small class="text-muted">ID: #{{ $mainQuestion->id }}</small>
-                        </div>
-
-                        {{-- Nội dung câu hỏi --}}
-                        <div class="question-content fw-bold text-dark mb-3">
-                            {!! $mainQuestion->content !!}
-                        </div>
-
-                        {{-- === TRƯỜNG HỢP 1: CÂU ĐÚNG/SAI CHÙM === --}}
-                        @if($mainQuestion->type == 'true_false_group') 
-                            <div class="table-responsive">
-                                <table class="table table-bordered tf-result-table mb-0">
-                                    <thead class="table-light text-center small text-uppercase">
-                                        <tr>
-                                            <th>Ý nhận định</th>
-                                            <th width="15%">Bạn chọn</th>
-                                            <th width="15%">Đáp án đúng</th>
-                                            <th width="10%">Kết quả</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        @foreach($group as $ans)
-                                            @php
-                                                $correctOpt = $ans->question->answers->where('is_correct', true)->first();
-                                                $correctText = $correctOpt ? $correctOpt->content : 'N/A';
-                                                $userText = $ans->selectedAnswer->content ?? 'Bỏ trống';
-                                                $rowClass = $ans->is_correct ? 'row-correct' : 'row-wrong';
-                                                $icon = $ans->is_correct ? '<i class="bi bi-check-circle-fill text-success"></i>' : '<i class="bi bi-x-circle-fill text-danger"></i>';
-                                            @endphp
-                                            <tr class="{{ $rowClass }}">
-                                                <td>{{ $ans->question->content }}</td>
-                                                <td class="text-center fw-bold {{ $ans->is_correct ? 'text-success' : 'text-danger' }}">{{ $userText }}</td>
-                                                <td class="text-center fw-bold text-primary">{{ $correctText }}</td>
-                                                <td class="text-center fs-5">{!! $icon !!}</td>
-                                            </tr>
-                                        @endforeach
-                                    </tbody>
-                                </table>
-                            </div>
-
-                        {{-- === TRƯỜNG HỢP 2: TRẮC NGHIỆM ĐƠN === --}}
-                        @elseif($mainQuestion->type == 'single_choice')
-                            <div class="d-flex flex-column gap-2">
-                                @php
-                                    $userAnsItem = $group->first(); 
-                                    $userSelectedId = $userAnsItem->selected_answer_id;
-                                @endphp
-
-                                @foreach($mainQuestion->answers as $opt)
-                                    @php
-                                        $isThisOptCorrect = $opt->is_correct;
-                                        $rowStyle = 'opt-item';
-                                        $icon = '<i class="bi bi-circle me-2 text-muted"></i>';
-
-                                        if ($opt->id == $userSelectedId) {
-                                            if ($isThisOptCorrect) {
-                                                $rowStyle = 'opt-user-correct'; $icon = '<i class="bi bi-check-circle-fill me-2"></i>';
-                                            } else {
-                                                $rowStyle = 'opt-user-wrong'; $icon = '<i class="bi bi-x-circle-fill me-2"></i>';
-                                            }
-                                        } elseif ($isThisOptCorrect) {
-                                            $rowStyle = 'opt-correct'; $icon = '<i class="bi bi-check-circle-fill me-2"></i>';
-                                        }
-                                    @endphp
-                                    <div class="d-flex align-items-center {{ $rowStyle }}">
-                                        {!! $icon !!} <span>{{ $opt->content }}</span>
-                                        @if($isThisOptCorrect && $opt->id != $userSelectedId) <span class="ms-auto badge bg-success bg-opacity-75">Đáp án đúng</span> @endif
-                                        @if($opt->id == $userSelectedId) <span class="ms-auto badge {{ $isThisOptCorrect ? 'bg-success' : 'bg-danger' }}">Bạn chọn</span> @endif
-                                    </div>
-                                @endforeach
+                    {{-- Khung chứa biểu đồ --}}
+                    <div style="width: 420px; height: 240px;"> 
+                        @if(isset($chartData) && count($chartData) > 0)
+                            <canvas id="progressChart"></canvas>
+                        @else
+                            <div class="h-100 d-flex align-items-center justify-content-center text-muted small">
+                                Chưa có đủ dữ liệu lịch sử
                             </div>
                         @endif
-
-                        {{-- [MỚI] HIỂN THỊ GỢI Ý NẾU LÀM SAI --}}
-{{-- [MỚI] HIỂN THỊ GỢI Ý CHI TIẾT NẾU LÀM SAI --}}
-                        @if($groupHasWrong)
-                            <div class="hint-box mt-3 p-3 bg-warning bg-opacity-10 border border-warning rounded-3">
-                                <div class="d-flex align-items-start">
-                                    <i class="bi bi-lightbulb-fill text-warning me-2 fs-5 mt-1"></i>
-                                    <div class="w-100">
-                                        <h6 class="fw-bold text-dark mb-2">Gợi ý ôn tập:</h6>
-                                        
-                                        <ul class="list-unstyled mb-0 small text-secondary">
-                                            {{-- 1. Lớp & Chủ đề --}}
-                                            <li class="mb-2">
-                                                <span class="badge bg-primary bg-opacity-10 text-primary border border-primary me-2">
-                                                    Lớp {{ $mainQuestion->grade }}
-                                                </span>
-                                                <span class="fw-bold text-dark">
-                                                    Chủ đề: {{ $mainQuestion->topic->name ?? 'Tổng hợp' }}
-                                                </span>
-                                            </li>
-
-                                            {{-- 2. Nội dung cốt lõi (Nếu có) --}}
-                                            @if($mainQuestion->coreContent)
-                                                <li class="mb-2 d-flex">
-                                                    <i class="bi bi-caret-right-fill text-secondary me-2"></i>
-                                                    <div>
-                                                        <span class="fw-bold">Nội dung cốt lõi:</span><br>
-                                                        {{ $mainQuestion->coreContent->name }}
-                                                    </div>
-                                                </li>
-                                            @endif
-                                            
-                                            {{-- 3. Yêu cầu cần đạt (Nếu có) --}}
-                                            @if($mainQuestion->learningObjective)
-                                                <li class="d-flex">
-                                                    <i class="bi bi-check2-circle text-success me-2"></i>
-                                                    <div>
-                                                        <span class="fw-bold">Yêu cầu cần đạt:</span><br>
-                                                        <span class="fst-italic text-dark">
-                                                            {{ $mainQuestion->learningObjective->content }}
-                                                        </span>
-                                                    </div>
-                                                </li>
-                                            @endif
-                                        </ul>
-                                    </div>
-                                </div>
-                            </div>
-                        @endif 
-
                     </div>
                 </div>
-            @endforeach
-
+            </div>
         </div>
+
+        {{-- MIDDLE SECTION: CHI TIẾT BÀI LÀM --}}
+        <div class="d-flex align-items-center gap-3 mb-4">
+            <h4 class="fw-bold text-dark m-0">Chi tiết bài làm</h4>
+            <div class="h-1px bg-secondary opacity-25 flex-grow-1"></div>
+        </div>
+
+        @foreach($sortedQuestions as $groupId => $group)
+            @php
+                $firstItem = $group->first();
+                $mainQuestion = $firstItem->question->parent ?? $firstItem->question;
+                
+                // Lọc môn không chọn
+                $ori = strtolower(trim($mainQuestion->orientation ?? ''));
+                if ($ori !== 'chung' && $ori !== '' && $userElective && $ori !== $userElective) {
+                    continue; 
+                }
+
+                $hasWrong = $group->contains('is_correct', false);
+                $statusClass = $hasWrong ? 'status-wrong' : 'status-correct';
+                $headerBg = $hasWrong ? 'bg-wrong-light' : 'bg-correct-light';
+                $statusText = $hasWrong ? 'Cần ôn tập' : 'Chính xác';
+                $statusTextColor = $hasWrong ? 'text-wrong' : 'text-correct';
+                $statusIcon = $hasWrong ? 'bi-exclamation-triangle-fill' : 'bi-check-circle-fill';
+            @endphp
+
+            <div class="q-wrapper {{ $statusClass }}">
+                {{-- Header --}}
+                <div class="p-3 {{ $headerBg }} border-bottom d-flex justify-content-between align-items-center">
+                    <div class="d-flex align-items-center gap-3">
+                        <span class="badge bg-white text-dark border shadow-sm px-3 py-2 rounded-pill fw-bold">Câu {{ $loop->iteration }}</span>
+                        <span class="badge bg-white text-secondary border px-3 py-2 rounded-pill fw-normal">
+                            {{ $mainQuestion->topic->name ?? 'Tổng hợp' }}
+                        </span>
+                    </div>
+                    <div class="fw-bold {{ $statusTextColor }} d-flex align-items-center gap-2">
+                        {{ $statusText }} <i class="bi {{ $statusIcon }}"></i>
+                    </div>
+                </div>
+
+                <div class="p-4">
+                    <div class="fs-5 fw-bold text-dark mb-4 lh-base">
+                        {!! $mainQuestion->content !!}
+                    </div>
+
+                    {{-- TRƯỜNG HỢP 1: TRẮC NGHIỆM ĐƠN --}}
+                    @if($mainQuestion->type == 'single_choice')
+                        <div class="d-flex flex-column gap-2">
+                            @php
+                                $userAns = $group->first();
+                                $userSelectedId = $userAns->selected_answer_id;
+                            @endphp
+
+                            @foreach($mainQuestion->answers as $opt)
+                                @php
+                                    $isCorrect = $opt->is_correct;
+                                    $isSelected = ($opt->id == $userSelectedId);
+                                    
+                                    $boxClass = 'ans-normal';
+                                    $icon = '<i class="bi bi-circle me-2"></i>';
+                                    $badge = '';
+
+                                    if ($isSelected) {
+                                        if ($isCorrect) {
+                                            $boxClass = 'ans-user-correct';
+                                            $icon = '<i class="bi bi-check-circle-fill me-2"></i>';
+                                            $badge = '<span class="badge bg-success text-white ms-auto">Bạn chọn</span>';
+                                        } else {
+                                            $boxClass = 'ans-user-wrong';
+                                            $icon = '<i class="bi bi-x-circle-fill me-2"></i>';
+                                            $badge = '<span class="badge bg-danger text-white ms-auto">Bạn chọn</span>';
+                                        }
+                                    } elseif ($isCorrect) {
+                                        $boxClass = 'ans-missed-correct';
+                                        $icon = '<i class="bi bi-check-circle-fill me-2"></i>';
+                                        $badge = '<span class="badge bg-success bg-opacity-10 text-success border border-success ms-auto">Đáp án đúng</span>';
+                                    }
+                                @endphp
+
+                                <div class="ans-box {{ $boxClass }}">
+                                    <div class="d-flex align-items-center w-100">
+                                        <span class="me-2">{!! $icon !!}</span>
+                                        <span class="flex-grow-1">{{ $opt->content }}</span>
+                                        {!! $badge !!}
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+
+                    {{-- TRƯỜNG HỢP 2: ĐÚNG/SAI CHÙM --}}
+                    @elseif($mainQuestion->type == 'true_false_group')
+                        <div class="table-responsive border rounded-3">
+                            <table class="table mb-0 align-middle">
+                                <thead class="bg-light">
+                                    <tr>
+                                        <th class="ps-3">Ý nhận định</th>
+                                        <th class="text-center" width="15%">Bạn chọn</th>
+                                        <th class="text-center" width="15%">Đáp án</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach($group as $ans)
+                                        @php
+                                            $correctOpt = $ans->question->answers->where('is_correct', true)->first();
+                                            $correctText = $correctOpt ? $correctOpt->content : '-';
+                                            $userText = $ans->selectedAnswer->content ?? '-';
+                                            $isRowCorrect = $ans->is_correct;
+                                            $rowBg = $isRowCorrect ? '' : 'bg-danger bg-opacity-10';
+                                        @endphp
+                                        <tr class="{{ $rowBg }}">
+                                            <td class="ps-3">{{ $ans->question->content }}</td>
+                                            <td class="text-center fw-bold {{ $isRowCorrect ? 'text-success' : 'text-danger' }}">
+                                                {{ $userText }}
+                                            </td>
+                                            <td class="text-center fw-bold text-primary">
+                                                {{ $correctText }}
+                                            </td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    @endif
+
+                    {{-- GỢI Ý ÔN TẬP (CÂU VĂN LIỀN MẠCH) --}}
+                    @if($hasWrong)
+                        <div class="tip-box">
+                            <i class="bi bi-lightbulb-fill fs-4 mt-1"></i>
+                            <div>
+                                <h6 class="fw-bold mb-1">Gợi ý ôn tập:</h6>
+                                <p class="mb-0 lh-base">
+                                    Bạn nên ôn lại kiến thức 
+                                    <strong class="text-dark">Lớp {{ $mainQuestion->grade }}</strong>, 
+                                    thuộc chủ đề <strong class="text-dark">{{ $mainQuestion->topic->name ?? '...' }}</strong>
+                                    @if($mainQuestion->coreContent)
+                                        , tập trung vào nội dung <strong class="text-dark">{{ $mainQuestion->coreContent->name }}</strong>
+                                    @endif
+                                    @if($mainQuestion->learningObjective)
+                                        để nắm vững yêu cầu <em class="text-dark">"{{ $mainQuestion->learningObjective->content }}"</em>
+                                    @endif.
+                                </p>
+                            </div>
+                        </div>
+                    @endif
+                </div>
+            </div>
+        @endforeach
     </div>
 
-    {{-- SCRIPT BIỂU ĐỒ --}}
-    @if(isset($chartData) && count($chartData) > 1)
+    {{-- CHART SCRIPT: BIỂU ĐỒ MIỀN (AREA CHART) --}}
+    @if(isset($chartData) && count($chartData) > 0)
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const ctx = document.getElementById('progressChart').getContext('2d');
-            const data = @json($chartData);
-            
+            const data = @json($chartData); // Dữ liệu từ Controller
+
+            // Tạo Gradient cho phần nền (Fill)
+            const gradientFill = ctx.createLinearGradient(0, 0, 0, 300);
+            gradientFill.addColorStop(0, 'rgba(14, 165, 233, 0.5)'); // Xanh đậm ở trên
+            gradientFill.addColorStop(1, 'rgba(14, 165, 233, 0.0)'); // Trong suốt ở dưới
+
             new Chart(ctx, {
-                type: 'line',
+                type: 'line', // Biểu đồ đường
                 data: {
-                    labels: data.map(d => d.date),
+                    labels: data.map(d => d.date), // Trục X: Ngày tháng
                     datasets: [{
                         label: 'Điểm số',
-                        data: data.map(d => d.score),
-                        borderColor: '#0d6efd',
-                        backgroundColor: 'rgba(13, 110, 253, 0.1)',
-                        borderWidth: 2,
-                        fill: true,
-                        tension: 0.3,
-                        pointBackgroundColor: data.map(d => d.is_current ? '#dc3545' : '#fff'),
-                        pointBorderColor: data.map(d => d.is_current ? '#dc3545' : '#0d6efd')
+                        data: data.map(d => d.score), // Trục Y: Điểm
+                        borderColor: '#0ea5e9',       // Màu đường kẻ (Xanh dương)
+                        backgroundColor: gradientFill, // Màu nền gradient (Tạo hiệu ứng Area)
+                        borderWidth: 3,
+                        pointBackgroundColor: '#fff',
+                        pointBorderColor: '#0ea5e9',
+                        pointRadius: 5,
+                        pointHoverRadius: 7,
+                        fill: true, // [QUAN TRỌNG] Bật chế độ Area Chart
+                        tension: 0.4 // [QUAN TRỌNG] Làm mềm đường cong
                     }]
                 },
                 options: {
                     responsive: true,
-                    plugins: { legend: { display: false } },
-                    scales: { y: { beginAtZero: true, max: 10 } }
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }, // Ẩn chú thích vì chỉ có 1 đường
+                        tooltip: {
+                            backgroundColor: '#1e293b',
+                            padding: 10,
+                            cornerRadius: 8,
+                            displayColors: false,
+                            callbacks: {
+                                label: function(context) {
+                                    return 'Điểm: ' + context.parsed.y;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 10,
+                            grid: { borderDash: [5, 5], color: '#f1f5f9' },
+                            ticks: { font: { family: "'Plus Jakarta Sans', sans-serif" } }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { font: { family: "'Plus Jakarta Sans', sans-serif" }, maxRotation: 45, minRotation: 0 }
+                        }
+                    }
                 }
             });
         });

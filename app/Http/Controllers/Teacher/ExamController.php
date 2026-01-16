@@ -4,41 +4,37 @@ namespace App\Http\Controllers\Teacher;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth; // Thêm Auth
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB; // [NEW] Add DB facade for transactions and raw queries
 use App\Models\Question;
 use App\Models\Topic;
 use App\Models\Competency;
 use App\Models\CognitiveLevel;
 use App\Models\Exam;
-use App\Models\ExamAttempt; // [QUAN TRỌNG] Thêm dòng này để gọi được bảng kết quả thi
+use App\Models\ExamAttempt;
+use App\Models\Answer;
 
 class ExamController extends Controller
 {
     public function index()
     {
-        // Lấy danh sách đề thi của giáo viên hiện tại
         $user = Auth::user();
-        
-        // Nếu muốn chỉ hiện đề của mình tạo:
-        /*$exams = Exam::where('created_by', $user->id) 
-                     ->latest()
-                     ->paginate(10);*/
+        // Show exams created by the current user or all, based on your preference
+        // $exams = Exam::where('creator_id', $user->id)->latest()->paginate(10);
         $exams = Exam::latest()->paginate(10);
-                     
-        // Nếu hệ thống cho phép xem tất cả thì dùng: $exams = Exam::latest()->paginate(10);
 
         return view('teacher.exams.index', compact('exams'));
     }
 
     public function create(Request $request)
     {
-        // 1. Khởi tạo Query
+        // 1. Initialize Query
         $query = Question::query();
 
-        // Chỉ lấy câu hỏi cha
+        // Only get parent questions
         $query->whereNull('parent_id');
 
-        // 2. Áp dụng các bộ lọc
+        // 2. Apply filters
         if ($request->filled('grade')) {
             $query->where('grade', $request->grade);
         }
@@ -58,13 +54,20 @@ class ExamController extends Controller
             $query->where('cognitive_level_id', $request->cognitive_level_id);
         }
 
-        // 3. Lấy dữ liệu phân trang
-        $questions = $query->with(['topic', 'cognitiveLevel', 'competency'])
-                           ->latest()
-                           ->paginate(20)
-                           ->withQueryString();
+        // 3. Get paginated data
+        // Thêm 'answers' và 'children.answers' vào mảng with
+$questions = $query->with([
+        'topic', 
+        'cognitiveLevel', 
+        'competency', 
+        'answers',           // <--- Lấy đáp án cho câu trắc nghiệm
+        'children.answers'   // <--- Lấy câu con và đáp án cho câu chùm
+    ])
+    ->latest()
+    ->paginate(20)
+    ->withQueryString();
 
-        // 4. Lấy dữ liệu cho Dropdown
+        // 4. Get dropdown data
         $topics = Topic::all();
         $competencies = Competency::all();
         $levels = CognitiveLevel::all();
@@ -72,79 +75,130 @@ class ExamController extends Controller
         return view('teacher.exams.create', compact('questions', 'topics', 'competencies', 'levels'));
     }
 
+    // [UPDATED] Store method with orientation validation logic
 public function store(Request $request)
-{
-    // 1. Validate Data
-    $request->validate([
-        'title' => 'required',
-        'duration' => 'required|integer',
-        'question_ids' => 'required', // String like "1,5,9"
-    ]);
+    {
+        // 1. Validate
+        $request->validate([
+            'title' => 'required|string|max:255',
+            'duration' => 'required|integer|min:5',
+            'question_ids' => 'nullable|string', 
+            
+            // Validate mảng câu hỏi mới
+            'new_questions' => 'nullable|array',
+            'new_questions.*.content' => 'required_with:new_questions|string',
+            'new_questions.*.grade' => 'required_with:new_questions|integer',
+            'new_questions.*.topic_id' => 'required_with:new_questions|exists:topics,id',
+            'new_questions.*.level' => 'required_with:new_questions|string',
+            
+            // [MỚI] Bắt buộc chọn định hướng khi tạo câu hỏi mới
+            'new_questions.*.orientation' => 'required_with:new_questions|in:chung,cs,ict',
+            
+            'new_questions.*.options' => 'required_with:new_questions|array|min:2',
+            'new_questions.*.correct_index' => 'required_with:new_questions|integer',
+        ]);
 
-    // 2. Handle Public/Private Status
-    $isPublic = $request->has('is_public') ? true : false;
+        // ... (Đoạn kiểm tra logic null giữ nguyên) ...
 
-    // 3. Create Exam Record (Initial creation)
-    $exam = Exam::create([
-        'title' => $request->title,
-        'duration' => $request->duration,
-        'creator_id' => Auth::id(), 
-        'is_public' => $isPublic,   
-        'total_questions' => 0, // Initialize with 0
-    ]);
+        try {
+            DB::beginTransaction();
 
-    // 4. Handle Questions and Ordering
-    $questionIds = explode(',', $request->question_ids);
-    
-    $pivotData = [];
-    foreach ($questionIds as $index => $id) {
-        // Prepare data for pivot table
-        // Key is question ID, Value is array of extra columns
-        $pivotData[$id] = ['order' => $index + 1];
+            // 2. Tạo Đề thi (Giữ nguyên)
+            $isPublic = $request->has('is_public') ? true : false;
+            $exam = Exam::create([
+                'title' => $request->title,
+                'duration' => $request->duration,
+                'creator_id' => Auth::id(),
+                'is_public' => $isPublic,
+                'total_questions' => 0, 
+            ]);
+
+            $finalQuestionIds = [];
+
+            // 3. Xử lý câu hỏi từ NGÂN HÀNG (Giữ nguyên)
+            if (!empty($request->question_ids)) {
+                $bankIds = explode(',', $request->question_ids);
+                $finalQuestionIds = array_merge($finalQuestionIds, $bankIds);
+            }
+
+            // 4. Xử lý câu hỏi TẠO MỚI (Cập nhật Orientation)
+            if (!empty($request->new_questions)) {
+                foreach ($request->new_questions as $qData) {
+                    
+                    // 4a. Tạo câu hỏi với đầy đủ Orientation
+                    $newQuestion = Question::create([
+                        'content' => $qData['content'],
+                        'type' => 'single_choice',
+                        'grade' => $qData['grade'],
+                        'topic_id' => $qData['topic_id'],
+                        'orientation' => $qData['orientation'], // [QUAN TRỌNG] Lưu CS/ICT/Chung
+                        'cognitive_level_id' => null, 
+                        'level' => $qData['level'] ?? 'medium',
+                        'user_id' => Auth::id(),
+                    ]);
+
+                    // 4b. Tạo đáp án (Giữ nguyên)
+                    foreach ($qData['options'] as $idx => $optContent) {
+                        Answer::create([
+                            'question_id' => $newQuestion->id,
+                            'content' => $optContent,
+                            'is_correct' => ($idx == $qData['correct_index']),
+                        ]);
+                    }
+
+                    $finalQuestionIds[] = $newQuestion->id;
+                }
+            }
+
+            // 5. Gắn câu hỏi & 6. Update số lượng (Giữ nguyên)
+            $pivotData = [];
+            foreach ($finalQuestionIds as $index => $id) {
+                $pivotData[$id] = ['order' => $index + 1];
+            }
+            $exam->questions()->sync($pivotData);
+            
+            $exam->update(['total_questions' => count($finalQuestionIds)]);
+
+            // 7. Thống kê lại để thông báo chính xác
+            $stats = Question::whereIn('id', $finalQuestionIds)
+                ->select('orientation', DB::raw('count(*) as total'))
+                ->groupBy('orientation')
+                ->pluck('total', 'orientation')
+                ->toArray();
+
+            $stats = array_change_key_case($stats, CASE_LOWER);
+            $countChung = ($stats['chung'] ?? 0) + ($stats[''] ?? 0); 
+            $countCS = $stats['cs'] ?? 0;
+            $countICT = $stats['ict'] ?? 0;
+
+            DB::commit();
+
+            $msg = "Tạo đề thành công! (Tổng: " . count($finalQuestionIds) . "). <br>Phân loại: <b>{$countChung} Chung</b> - <b>{$countCS} CS</b> - <b>{$countICT} ICT</b>";
+
+            return redirect()->route('teacher.exams.index')->with('success', $msg);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi: ' . $e->getMessage())->withInput();
+        }
     }
 
-    // 5. Attach questions to the pivot table
-    $exam->questions()->attach($pivotData);
-
-    // 6. [CRITICAL FIX] Update total_questions count
-    // This step was missing, causing the "0 questions" issue
-    $exam->update([
-        'total_questions' => count($questionIds)
-    ]);
-
-    return redirect()->route('teacher.exams.index')->with('success', 'Exam created successfully!');
-}
-
-    /**
-     * [CẬP NHẬT] Hàm hiển thị kết quả thi chi tiết
-     */
     public function results($id)
     {
-        // 1. Lấy thông tin đề thi
         $exam = Exam::findOrFail($id);
-
-        // 2. Lấy danh sách bài làm (attempts) của đề thi này
-        // Kèm theo thông tin user để hiển thị tên học sinh
         $attempts = ExamAttempt::with('user')
             ->where('exam_id', $id)
-            ->orderBy('total_score', 'desc') // Sắp xếp điểm cao nhất lên đầu
+            ->orderBy('total_score', 'desc')
             ->get();
 
-        // 3. Trả về View kết quả (file results.blade.php chúng ta đã làm đẹp)
         return view('teacher.exams.results', compact('exam', 'attempts'));
     }
 
-    // --- [MỚI] Hàm hiển thị Form chỉnh sửa ---
     public function edit(Request $request, $id)
     {
-        // 1. Lấy thông tin đề thi & câu hỏi đã chọn
         $exam = Exam::with('questions')->findOrFail($id);
-
-        // Lấy danh sách ID câu hỏi đang có trong đề để truyền xuống View (cho JS xử lý)
-        // pluck('id') lấy mảng [1, 5, 9...]
         $currentQuestionIds = $exam->questions->pluck('id')->toArray();
 
-        // 2. Logic Lọc câu hỏi (Tương tự hàm create - Copy lại)
         $query = Question::query()->whereNull('parent_id');
 
         if ($request->filled('grade')) $query->where('grade', $request->grade);
@@ -153,13 +207,18 @@ public function store(Request $request)
         if ($request->filled('competency_id')) $query->where('competency_id', $request->competency_id);
         if ($request->filled('cognitive_level_id')) $query->where('cognitive_level_id', $request->cognitive_level_id);
 
-        // 3. Lấy dữ liệu phân trang
-        $questions = $query->with(['topic', 'cognitiveLevel', 'competency'])
-                           ->latest()
-                           ->paginate(20)
-                           ->withQueryString();
+        // Thêm 'answers' và 'children.answers' vào mảng with
+$questions = $query->with([
+        'topic', 
+        'cognitiveLevel', 
+        'competency', 
+        'answers',           // <--- Lấy đáp án cho câu trắc nghiệm
+        'children.answers'   // <--- Lấy câu con và đáp án cho câu chùm
+    ])
+    ->latest()
+    ->paginate(20)
+    ->withQueryString();
 
-        // 4. Dữ liệu bổ trợ (Dropdown)
         $topics = Topic::all();
         $competencies = Competency::all();
         $levels = CognitiveLevel::all();
@@ -167,7 +226,6 @@ public function store(Request $request)
         return view('teacher.exams.edit', compact('exam', 'questions', 'topics', 'competencies', 'levels', 'currentQuestionIds'));
     }
 
-    // --- [MỚI] Hàm xử lý Lưu cập nhật ---
     public function update(Request $request, $id)
     {
         $request->validate([
@@ -178,44 +236,36 @@ public function store(Request $request)
 
         $exam = Exam::findOrFail($id);
         
-        // 1. Cập nhật thông tin cơ bản
         $isPublic = $request->has('is_public') ? true : false;
         
         $exam->update([
             'title' => $request->title,
             'duration' => $request->duration,
             'is_public' => $isPublic,
-            // Không update creator_id
         ]);
 
-        // 2. Xử lý danh sách ID câu hỏi
         $questionIds = explode(',', $request->question_ids);
         $pivotData = [];
         foreach ($questionIds as $index => $qId) {
             $pivotData[$qId] = ['order' => $index + 1];
         }
 
-        // 3. [QUAN TRỌNG] Dùng sync() thay vì attach()
-        // sync() sẽ: Xóa câu cũ không còn trong danh sách, Thêm câu mới, Cập nhật thứ tự câu cũ
         $exam->questions()->sync($pivotData);
-
-        // 4. Cập nhật lại số lượng câu hỏi
         $exam->update(['total_questions' => count($questionIds)]);
 
         return redirect()->route('teacher.exams.index')->with('success', 'Cập nhật đề thi thành công!');
     }
-    // Trong file Teacher\ExamController.php
 
-public function destroy($id)
+    public function destroy($id)
 {
+    // Tìm đề thi thuộc về giáo viên hiện tại
     $exam = Exam::where('creator_id', Auth::id())->findOrFail($id);
     
-    // Xóa dữ liệu trong bảng trung gian trước (nếu chưa set cascade trong database)
-    $exam->questions()->detach();
-    
-    // Xóa đề thi
+    // Thực hiện xóa mềm (Soft Delete)
+    // Dữ liệu vẫn còn trong DB nhưng sẽ ẩn khỏi trang danh sách
+    // Không bị lỗi khóa ngoại vì ID vẫn tồn tại cho bảng exam_attempts tham chiếu
     $exam->delete();
 
-    return redirect()->back()->with('success', 'Đã xóa đề thi thành công.');
+    return redirect()->back()->with('success', 'Đề thi đã được ẩn khỏi danh sách.');
 }
 }

@@ -24,17 +24,35 @@ class ProfileController extends Controller
     /**
      * Update the user's profile information.
      */
-    public function update(ProfileUpdateRequest $request): RedirectResponse
+public function update(Request $request)
     {
-        $request->user()->fill($request->validated());
+        $user = $request->user();
 
-        if ($request->user()->isDirty('email')) {
-            $request->user()->email_verified_at = null;
+        // 1. Chỉ validate Avatar (Không validate name/email nữa)
+        $request->validate([
+            'avatar' => ['nullable', 'image', 'max:2048'], // Max 2MB
+        ]);
+
+        // 2. Xử lý Upload Avatar
+        if ($request->hasFile('avatar')) {
+            // Xóa ảnh cũ nếu có (tránh rác server)
+            if ($user->avatar && \Storage::disk('public')->exists($user->avatar)) {
+                \Storage::disk('public')->delete($user->avatar);
+            }
+
+            // Lưu ảnh mới
+            $path = $request->file('avatar')->store('avatars', 'public');
+            $user->avatar = $path;
         }
 
-        $request->user()->save();
+        // 3. LƯU Ý QUAN TRỌNG: Không gán $request->name hay $request->email vào user
+        // Chỉ lưu avatar (nếu có thay đổi)
+        if ($user->isDirty('avatar')) {
+            $user->save();
+            return Redirect::route('profile.edit')->with('status', 'avatar-updated');
+        }
 
-        return Redirect::route('profile.edit')->with('status', 'profile-updated');
+        return Redirect::route('profile.edit');
     }
 
     /**

@@ -146,4 +146,35 @@ public function edit($id)
 
         return new StreamedResponse($callback, 200, $headers);
     }
+    /**
+     * Xóa (Hủy) ca thi
+     */
+    public function destroy($id)
+    {
+        try {
+            // 1. Tìm ca thi theo ID
+            $session = ExamSession::findOrFail($id);
+
+            // 2. Kiểm tra an toàn: Nếu đã có học sinh nộp bài thi (Attempt) thì không cho xóa
+            // (Giả sử bạn có quan hệ examAttempts trong model ExamSession)
+            if ($session->examAttempts()->count() > 0) {
+                return redirect()->route('teacher.sessions.index')
+                    ->with('error', 'Không thể xóa ca thi này vì đã có học sinh làm bài.');
+            }
+
+            // 3. Xóa các dữ liệu liên quan (nếu Database không cài đặt Cascade Delete)
+            // Xóa danh sách học sinh được gán vào ca thi (nếu có)
+            $session->students()->delete(); 
+
+            // 4. Xóa ca thi
+            $session->delete();
+
+            return redirect()->route('teacher.sessions.index')
+                ->with('success', 'Đã xóa ca thi thành công.');
+
+        } catch (\Exception $e) {
+            return redirect()->route('teacher.sessions.index')
+                ->with('error', 'Có lỗi xảy ra: ' . $e->getMessage());
+        }
+    }
 }   
