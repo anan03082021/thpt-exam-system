@@ -35,11 +35,10 @@ class QuestionController extends Controller
     public function create()
     {
         // [MỚI] Load Topic kèm theo quan hệ để làm Dropdown phụ thuộc (nếu cần xử lý JS)
-        $topics = Topic::with(['learningObjectives', 'coreContents'])->get();
         $competencies = Competency::all();
         $levels = CognitiveLevel::all();
         
-        return view('teacher.questions.create', compact('topics', 'competencies', 'levels'));
+        return view('teacher.questions.create', compact('competencies', 'levels'));
     }
 
     // 3. Xử lý lưu câu hỏi (Full)

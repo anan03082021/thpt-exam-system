@@ -5,7 +5,6 @@
         .form-select:focus, .form-control:focus { border-color: #6366f1; box-shadow: 0 0 0 0.25rem rgba(99, 102, 241, 0.25); }
         .quick-input-area { background-color: #f0fdf4; border: 2px dashed #16a34a; border-radius: 8px; }
         .guide-text { font-size: 0.9rem; color: #15803d; }
-        .guide-badge { font-size: 0.75rem; padding: 3px 8px; border-radius: 4px; font-weight: bold; }
     </style>
     @endpush
 
@@ -31,31 +30,31 @@
         <div class="card shadow-sm mb-4 border-0 rounded-4">
             <div class="card-header bg-white fw-bold py-3 border-bottom"><i class="bi bi-tags"></i> 1. Thông tin phân loại</div>
             <div class="card-body bg-light">
-                {{-- (Giữ nguyên phần chọn Lớp, Chủ đề, YCCD...) --}}
                 <div class="row mb-3">
+                    {{-- [SỬA] Thêm ID để JS bắt sự kiện --}}
                     <div class="col-md-3">
                         <label class="form-label fw-bold">Lớp <span class="text-danger">*</span></label>
-                        <select name="grade" class="form-select" required>
+                        <select name="grade" id="gradeSelect" class="form-select" required>
                             <option value="">-- Chọn --</option>
                             <option value="10">Lớp 10</option>
                             <option value="11">Lớp 11</option>
                             <option value="12">Lớp 12</option>
                         </select>
                     </div>
+                    {{-- [SỬA] Thêm ID để JS bắt sự kiện --}}
                     <div class="col-md-3">
                         <label class="form-label fw-bold">Định hướng <span class="text-danger">*</span></label>
-                        <select name="orientation" class="form-select" required>
-    <option value="">-- Chọn định hướng --</option>
-    <option value="chung" {{ old('orientation') == 'chung' ? 'selected' : '' }}>Chung (Bắt buộc)</option>
-    <option value="cs" {{ old('orientation') == 'cs' ? 'selected' : '' }}>Khoa học máy tính (CS)</option>
-    <option value="ict" {{ old('orientation') == 'ict' ? 'selected' : '' }}>Tin học ứng dụng (ICT)</option>
-</select>
+                        <select name="orientation" id="orientationSelect" class="form-select" required>
+                            <option value="chung">Chung (Bắt buộc)</option>
+                            <option value="cs">Khoa học máy tính (CS)</option>
+                            <option value="ict">Tin học ứng dụng (ICT)</option>
+                        </select>
                     </div>
+                    {{-- [SỬA] Xóa foreach, để disabled mặc định --}}
                     <div class="col-md-6">
                         <label class="form-label fw-bold">Chủ đề <span class="text-danger">*</span></label>
-                        <select name="topic_id" id="topicSelect" class="form-select" required>
-                            <option value="">-- Chọn chủ đề --</option>
-                            @foreach($topics as $topic) <option value="{{ $topic->id }}">{{ $topic->name }}</option> @endforeach
+                        <select name="topic_id" id="topicSelect" class="form-select" disabled required>
+                            <option value="">-- Vui lòng chọn Lớp & Định hướng trước --</option>
                         </select>
                     </div>
                 </div>
@@ -63,11 +62,11 @@
                 <div class="row mb-3">
                     <div class="col-md-6">
                         <label class="form-label fw-bold text-primary">Nội dung cốt lõi</label>
-                        <select name="core_content_id" id="coreContentSelect" class="form-select bg-white"><option value="">-- Vui lòng chọn chủ đề trước --</option></select>
+                        <select name="core_content_id" id="coreContentSelect" class="form-select bg-white" disabled><option value="">-- Chọn chủ đề trước --</option></select>
                     </div>
                     <div class="col-md-6">
                         <label class="form-label fw-bold text-primary">Yêu cầu cần đạt</label>
-                        <select name="learning_objective_id" id="objectiveSelect" class="form-select bg-white"><option value="">-- Vui lòng chọn chủ đề trước --</option></select>
+                        <select name="learning_objective_id" id="objectiveSelect" class="form-select bg-white" disabled><option value="">-- Chọn nội dung trước --</option></select>
                     </div>
                 </div>
 
@@ -80,7 +79,6 @@
                     </div>
                     <div class="col-md-4">
                         <label class="form-label fw-bold">Loại câu hỏi <span class="text-danger">*</span></label>
-                        {{-- Khi đổi loại câu hỏi -> Đổi hướng dẫn nhập nhanh --}}
                         <select name="type" id="questionType" class="form-select" onchange="toggleFormType()">
                             <option value="single_choice">Dạng 1: Trắc nghiệm</option>
                             <option value="true_false_group">Dạng 2: Đúng/Sai</option>
@@ -115,7 +113,6 @@
                     <div class="quick-input-area p-3 mb-3">
                         <div class="d-flex justify-content-between">
                             <label class="form-label fw-bold text-success">Dán nội dung vào đây:</label>
-                            {{-- Hướng dẫn thay đổi theo loại câu hỏi --}}
                             <div id="guideSingle" class="guide-text">
                                 <span class="bg-white border px-1 rounded">Quy tắc Trắc nghiệm:</span> 
                                 Đánh dấu sao <code>*</code> trước đáp án đúng.
@@ -160,7 +157,7 @@
                 <div id="formTrueFalse" style="display: none;">
                     <div class="mb-4">
                         <label class="form-label fw-bold">Đoạn văn dẫn <span class="text-danger">*</span></label>
-                        <textarea id="tf_content" class="form-control"></textarea> {{-- Dùng CKEditor cho TF luôn --}}
+                        <textarea id="tf_content" class="form-control"></textarea>
                     </div>
                     <label class="form-label fw-bold text-primary mb-3">4 Ý nhận định con:</label>
                     <div class="row">
@@ -202,14 +199,13 @@
     </form>
 
 @push('scripts')
-    {{-- Import thư viện CKEditor --}}
     <script src="https://cdn.ckeditor.com/ckeditor5/40.2.0/classic/ckeditor.js"></script>
 
     <script>
-        let myEditor; // Editor cho Trắc nghiệm
-        let tfEditor; // Editor cho Đúng/Sai
+        let myEditor;
+        let tfEditor;
 
-        // --- 1. CẤU HÌNH UPLOAD ẢNH ---
+        // --- 1. CẤU HÌNH EDITOR ---
         const editorConfig = {
             toolbar: [
                 'heading', '|', 'bold', 'italic', 'link', 'bulletedList', 'numberedList', 
@@ -217,60 +213,115 @@
             ],
             simpleUpload: {
                 uploadUrl: "{{ route('teacher.questions.upload_image') }}",
-                headers: {
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-                }
+                headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content') }
             }
         };
 
-        // --- 2. KHỞI TẠO EDITOR ---
         ClassicEditor.create(document.querySelector('#editorContent'), editorConfig)
-            .then(e => { myEditor = e; })
-            .catch(err => console.error(err));
-
+            .then(e => { myEditor = e; }).catch(err => console.error(err));
+        
         ClassicEditor.create(document.querySelector('#tf_content'), editorConfig)
-            .then(e => { tfEditor = e; })
-            .catch(err => console.error(err));
+            .then(e => { tfEditor = e; }).catch(err => console.error(err));
 
+        // --- 2. LOGIC LỌC CHỦ ĐỀ MỚI (SỬ DỤNG AJAX - KHÔNG DÙNG $topics CŨ) ---
+        const els = {
+            grade: document.getElementById('gradeSelect'),
+            orient: document.getElementById('orientationSelect'),
+            topic: document.getElementById('topicSelect'),
+            core: document.getElementById('coreContentSelect'),
+            obj: document.getElementById('objectiveSelect')
+        };
 
-        // --- 3. DATA & LOGIC LỌC CHỦ ĐỀ (Giữ nguyên) ---
-        const topicsData = @json($topics);
-        const topicSelect = document.getElementById('topicSelect');
-        const coreSelect = document.getElementById('coreContentSelect');
-        const objSelect = document.getElementById('objectiveSelect');
+        const resetSelect = (el, msg) => {
+            el.innerHTML = `<option value="">${msg}</option>`;
+            el.disabled = true;
+        };
 
-        topicSelect.addEventListener('change', function() {
-            const selectedId = parseInt(this.value);
-            coreSelect.innerHTML = '<option value="">-- Chọn nội dung --</option>';
-            objSelect.innerHTML = '<option value="">-- Chọn yêu cầu --</option>';
-            if (!selectedId) return;
-            const topic = topicsData.find(t => t.id === selectedId);
-            if (topic) {
-                if (topic.core_contents) topic.core_contents.forEach(c => coreSelect.add(new Option(c.name, c.id)));
-                if (topic.learning_objectives) topic.learning_objectives.forEach(o => objSelect.add(new Option(o.content.substring(0,90), o.id)));
+        // Khi đổi Lớp hoặc Định hướng -> Gọi API lấy Chủ đề
+        const loadTopics = () => {
+            const g = els.grade.value;
+            const o = els.orient.value;
+
+            resetSelect(els.topic, '-- Đang tải... --');
+            resetSelect(els.core, '-- Chọn chủ đề trước --');
+            resetSelect(els.obj, '-- Chọn nội dung trước --');
+
+            if (!g) {
+                resetSelect(els.topic, '-- Vui lòng chọn Lớp & Định hướng trước --');
+                return;
             }
+
+            fetch(`/api/topics?grade=${g}&orientation=${o}`)
+                .then(r => r.json())
+                .then(data => {
+                    els.topic.innerHTML = '<option value="">-- Chọn chủ đề --</option>';
+                    data.forEach(t => {
+                        els.topic.innerHTML += `<option value="${t.id}">${t.name}</option>`;
+                    });
+                    els.topic.disabled = false;
+                });
+        };
+
+        els.grade.addEventListener('change', loadTopics);
+        els.orient.addEventListener('change', loadTopics);
+
+        // Khi chọn Chủ đề -> Gọi API lấy Nội dung cốt lõi
+        els.topic.addEventListener('change', function() {
+            const tId = this.value;
+            const g = els.grade.value;
+            const o = els.orient.value;
+            
+            resetSelect(els.core, '-- Đang tải... --');
+            resetSelect(els.obj, '-- Chọn nội dung trước --');
+            
+            if (!tId) return;
+
+            fetch(`/api/core-contents?topic_id=${tId}&grade=${g}&orientation=${o}`)
+                .then(r => r.json())
+                .then(data => {
+                    els.core.innerHTML = '<option value="">-- Chọn nội dung cốt lõi --</option>';
+                    data.forEach(c => {
+                        els.core.innerHTML += `<option value="${c.id}">${c.name}</option>`;
+                    });
+                    els.core.disabled = false;
+                });
         });
 
-        // --- 4. TOGGLE FORM (ẨN HIỆN) ---
+        // Khi chọn Nội dung -> Gọi API lấy YCCĐ
+        els.core.addEventListener('change', function() {
+            const cId = this.value;
+            resetSelect(els.obj, '-- Đang tải... --');
+            if (!cId) return;
+
+            fetch(`/api/learning-objectives?core_content_id=${cId}`)
+                .then(r => r.json())
+                .then(data => {
+                    els.obj.innerHTML = '<option value="">-- Chọn yêu cầu cần đạt --</option>';
+                    data.forEach(obj => {
+                        const text = obj.content.length > 90 ? obj.content.substring(0,90)+'...' : obj.content;
+                        els.obj.innerHTML += `<option value="${obj.id}" title="${obj.content}">${text}</option>`;
+                    });
+                    els.obj.disabled = false;
+                });
+        });
+
+        // --- 3. CÁC HÀM XỬ LÝ GIAO DIỆN KHÁC (GIỮ NGUYÊN) ---
         function toggleFormType() {
             var type = document.getElementById('questionType').value;
             var formSingle = document.getElementById('formSingleChoice');
             var formTF = document.getElementById('formTrueFalse');
             var mainLevelDiv = document.getElementById('mainLevelDiv');
             
-            // Hướng dẫn nhập nhanh
             document.getElementById('guideSingle').style.display = (type === 'single_choice') ? 'block' : 'none';
             document.getElementById('guideTF').style.display = (type === 'true_false_group') ? 'block' : 'none';
 
-            // Placeholder nhập nhanh
-            const rawInput = document.getElementById('rawInput');
             if (type === 'single_choice') {
-                rawInput.placeholder = "Ví dụ:\nPython là gì?\nA. Rắn\n*B. Ngôn ngữ lập trình\nC. Món ăn\nD. Loại xe";
+                document.getElementById('rawInput').placeholder = "Ví dụ:\nPython là gì?\nA. Rắn\n*B. Ngôn ngữ lập trình\nC. Món ăn\nD. Loại xe";
                 formSingle.style.display = 'block';
                 formTF.style.display = 'none';
                 mainLevelDiv.style.visibility = 'visible';
             } else {
-                rawInput.placeholder = "Ví dụ:\nCho đoạn code...\n+ Ý đúng\n- Ý sai\n+ Ý đúng\n- Ý sai";
+                document.getElementById('rawInput').placeholder = "Ví dụ:\nCho đoạn code...\n+ Ý đúng\n- Ý sai\n+ Ý đúng\n- Ý sai";
                 formSingle.style.display = 'none';
                 formTF.style.display = 'block';
                 mainLevelDiv.style.visibility = 'hidden';
@@ -282,7 +333,6 @@
             document.getElementById('quickInputSection').style.display = isChecked ? 'block' : 'none';
         }
 
-        // --- 5. HÀM PHÂN TÍCH (AUTO PARSE) ---
         function parseQuestion() {
             let rawText = document.getElementById('rawInput').value.trim();
             if (!rawText) { alert("Chưa nhập nội dung!"); return; }
@@ -299,7 +349,7 @@
                     let text = line.trim();
                     let isCorrect = text.startsWith('*');
                     if (isCorrect) text = text.substring(1).trim();
-                    text = text.replace(/^[A-D0-9][\.\)]\s*/i, ''); // Xóa A. B.
+                    text = text.replace(/^[A-D0-9][\.\)]\s*/i, ''); 
                     document.getElementById('input_ans_' + index).value = text;
                     if (isCorrect) document.getElementById('radio_ans_' + index).checked = true;
                 });
@@ -314,7 +364,7 @@
                     let isTrue = text.startsWith('+');
                     let isFalse = text.startsWith('-');
                     if (isTrue || isFalse) text = text.substring(1).trim();
-                    text = text.replace(/^[0-9][\.\)]\s*/i, ''); // Xóa 1. 2.
+                    text = text.replace(/^[0-9][\.\)]\s*/i, ''); 
                     document.getElementById('tf_item_content_' + index).value = text;
                     let selectBox = document.getElementById('tf_item_correct_' + index);
                     if (isTrue) selectBox.value = 'true';
@@ -324,41 +374,22 @@
             alert("Đã phân tích xong! Hãy kiểm tra lại trước khi lưu.");
         }
 
-        // --- 6. XỬ LÝ SỰ KIỆN SUBMIT (QUAN TRỌNG NHẤT) ---
         document.getElementById('createQuestionForm').addEventListener('submit', function(e) {
             let type = document.getElementById('questionType').value;
             let singleChoiceTextarea = document.getElementById('editorContent');
 
-            // TRƯỜNG HỢP 1: TRẮC NGHIỆM
             if (type === 'single_choice') {
-                // Đảm bảo textarea gốc nhận dữ liệu từ CKEditor
                 if (myEditor) {
                     let data = myEditor.getData();
-                    if (!data) {
-                        e.preventDefault();
-                        alert("Vui lòng nhập nội dung câu hỏi!");
-                        return;
-                    }
+                    if (!data) { e.preventDefault(); alert("Vui lòng nhập nội dung câu hỏi!"); return; }
                     singleChoiceTextarea.value = data;
                 }
-                // Đảm bảo có name="content"
                 singleChoiceTextarea.setAttribute('name', 'content');
-            } 
-            
-            // TRƯỜNG HỢP 2: ĐÚNG/SAI CHÙM
-            else if (type === 'true_false_group') {
-                // Xóa name của trắc nghiệm để không bị gửi thừa
+            } else if (type === 'true_false_group') {
                 singleChoiceTextarea.removeAttribute('name');
-
-                // Lấy dữ liệu từ editor Đúng/Sai
                 if (tfEditor) {
                     let data = tfEditor.getData();
-                    if (!data) {
-                        e.preventDefault();
-                        alert("Vui lòng nhập đoạn văn dẫn!");
-                        return;
-                    }
-                    // Tạo input ẩn để gửi content đi
+                    if (!data) { e.preventDefault(); alert("Vui lòng nhập đoạn văn dẫn!"); return; }
                     let hiddenInput = document.createElement("input");
                     hiddenInput.type = "hidden";
                     hiddenInput.name = "content";

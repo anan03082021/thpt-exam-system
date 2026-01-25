@@ -22,11 +22,11 @@
     </a>
 </li>
 
-{{-- 4. Tổ chức thi (Ca thi) --}}
+{{-- 4. Quản lý kỳ thi --}}
 <li class="nav-item">
     <a class="nav-link {{ request()->routeIs('teacher.sessions.*') ? 'active' : '' }}" 
        href="{{ route('teacher.sessions.index') }}">
-        <i class="bi bi-calendar-check"></i> {{ __('Tổ chức thi') }}
+        <i class="bi bi-calendar-check"></i> {{ __('Quản lý kỳ thi') }}
     </a>
 </li>
 

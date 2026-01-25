@@ -2,88 +2,76 @@
 
     @push('styles')
     <style>
-        /* Tông màu chủ đạo cho trang Ca thi (Indigo/Tím than) */
-        .card-header-custom {
-            background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
-            color: white;
-        }
-        .form-label {
-            font-weight: 600;
-            color: #374151;
-            margin-bottom: 0.5rem;
-        }
-        .form-control:focus, .form-select:focus {
-            border-color: #6366f1;
-            box-shadow: 0 0 0 0.25rem rgba(99, 102, 241, 0.25);
-        }
-        .btn-indigo {
-            background-color: #4f46e5;
-            color: white;
-            border: none;
-        }
-        .btn-indigo:hover {
-            background-color: #4338ca;
-            color: white;
+        /* --- STYLE HIỆN ĐẠI (CLEAN UI) --- */
+        :root { --primary-color: #4f46e5; --text-secondary: #64748b; }
+
+        /* Card Styles */
+        .card-custom {
+            border: none; border-radius: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02), 0 2px 4px -1px rgba(0,0,0,0.02);
+            /* Đã xóa h-100 để không bị khoảng trắng thừa */
         }
         
-        /* Upload box */
-        .upload-box {
-            border: 2px dashed #d1d5db;
-            border-radius: 8px;
-            padding: 1.5rem;
-            text-align: center;
-            background-color: #f9fafb;
+        /* Form Inputs */
+        .form-label { font-weight: 600; color: #334155; font-size: 0.9rem; margin-bottom: 0.5rem; }
+        .form-control, .form-select {
+            padding: 0.75rem 1rem; border-color: #e2e8f0; border-radius: 8px; font-size: 0.95rem;
             transition: all 0.2s;
         }
-        .upload-box:hover {
-            border-color: #6366f1;
-            background-color: #eef2ff;
+        .form-control:focus, .form-select:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
         }
+        
+        /* Upload Area */
+        .upload-area {
+            border: 2px dashed #cbd5e1; border-radius: 12px; padding: 1.5rem;
+            text-align: center; background-color: #f8fafc; transition: all 0.2s; cursor: pointer;
+            position: relative;
+        }
+        .upload-area:hover { border-color: var(--primary-color); background-color: #eef2ff; }
+        .upload-icon { font-size: 2rem; color: #94a3b8; margin-bottom: 0.5rem; }
+        
+        /* Section Divider */
+        .form-section-title {
+            font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;
+            color: #94a3b8; font-weight: 700; margin-bottom: 1.5rem; border-bottom: 1px solid #f1f5f9; padding-bottom: 0.5rem;
+        }
+
+        /* Buttons */
+        .btn-gradient {
+            background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+            border: none; color: white; padding: 0.75rem 1.5rem; font-weight: 600;
+            box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2); transition: all 0.2s;
+        }
+        .btn-gradient:hover { transform: translateY(-2px); box-shadow: 0 6px 12px -1px rgba(79, 70, 229, 0.3); color: white; }
     </style>
     @endpush
 
-    {{-- Breadcrumb --}}
-    <nav aria-label="breadcrumb" class="mb-4">
-        <ol class="breadcrumb">
-            <li class="breadcrumb-item"><a href="{{ route('teacher.dashboard') }}" class="text-decoration-none text-muted">Dashboard</a></li>
-            <li class="breadcrumb-item"><a href="{{ route('teacher.sessions.index') }}" class="text-decoration-none text-muted">Ca thi</a></li>
-            <li class="breadcrumb-item active text-primary fw-bold" aria-current="page">Tổ chức mới</li>
-        </ol>
-    </nav>
+    {{-- ĐÃ XÓA PHẦN HEADER/BREADCRUMB Ở ĐÂY --}}
 
-    <div class="row justify-content-center">
-        <div class="col-lg-8">
-            <div class="card border-0 shadow-lg rounded-3 overflow-hidden">
-                
-                {{-- Header Card --}}
-                <div class="card-header card-header-custom py-3">
-                    <h5 class="mb-0 fw-bold d-flex align-items-center">
-                        <i class="bi bi-calendar-check-fill me-2 fs-5"></i> Thiết lập Ca thi / Kỳ thi
-                    </h5>
-                </div>
-
-                <div class="card-body p-4 bg-white">
-                    <form action="{{ route('teacher.sessions.store') }}" method="POST" enctype="multipart/form-data">
-                        @csrf
+    <form action="{{ route('teacher.sessions.store') }}" method="POST" enctype="multipart/form-data" class="mt-4">
+        @csrf
+        <div class="row g-4">
+            
+            {{-- CỘT TRÁI: FORM NHẬP LIỆU CHÍNH (GỘP TẤT CẢ VÀO ĐÂY) --}}
+            <div class="col-lg-9">
+                <div class="card card-custom bg-white">
+                    <div class="card-body p-5">
                         
-                        {{-- 1. Tên kỳ thi --}}
-                        <div class="mb-4">
-                            <label class="form-label">Tên Ca thi / Kỳ thi <span class="text-danger">*</span></label>
-                            <input type="text" 
-                                   name="title" 
-                                   class="form-control form-control-lg bg-light border-0" 
-                                   placeholder="Ví dụ: Thi cuối kỳ I - Lớp 12A1" 
-                                   required 
-                                   autofocus>
-                            <div class="form-text text-muted">Tên hiển thị cho học sinh thấy trên Dashboard.</div>
-                        </div>
+                        {{-- PHẦN 1: THÔNG TIN CƠ BẢN --}}
+                        <div class="mb-5">
+                            <h6 class="form-section-title"><i class="bi bi-info-circle me-2"></i> Thông tin cơ bản</h6>
+                            
+                            <div class="mb-4">
+                                <label class="form-label">Tên Ca thi / Kỳ thi <span class="text-danger">*</span></label>
+                                <input type="text" name="title" class="form-control form-control-lg fw-bold text-dark" 
+                                       placeholder="Nhập tên kỳ thi (VD: Thi cuối kỳ I - Lớp 12A)" required autofocus>
+                            </div>
 
-                        {{-- 2. Chọn đề gốc --}}
-                        <div class="mb-4">
-                            <label class="form-label">Chọn đề thi gốc <span class="text-danger">*</span></label>
-                            <div class="input-group">
-                                <span class="input-group-text bg-light border-0"><i class="bi bi-file-earmark-text"></i></span>
-                                <select name="exam_id" class="form-select bg-light border-0" required>
+                            <div class="mb-4">
+                                <label class="form-label">Chọn đề thi gốc <span class="text-danger">*</span></label>
+                                <select name="exam_id" class="form-select" required>
                                     <option value="" selected disabled>-- Chọn đề thi từ thư viện --</option>
                                     @foreach($exams as $exam)
                                         <option value="{{ $exam->id }}">
@@ -92,87 +80,75 @@
                                     @endforeach
                                 </select>
                             </div>
-                            <div class="form-text text-muted">Đề thi này sẽ được sử dụng để trộn đề cho các thí sinh.</div>
-                        </div>
 
-                        <hr class="my-4 border-light">
-
-                        {{-- 3. Thời gian tổ chức --}}
-                        <h6 class="fw-bold text-dark mb-3"><i class="bi bi-clock me-2 text-primary"></i>Thời gian tổ chức</h6>
-                        <div class="row mb-4">
-                            <div class="col-md-6">
-                                <label class="form-label">Bắt đầu <span class="text-danger">*</span></label>
-                                <input type="datetime-local" name="start_at" class="form-control" required>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">Kết thúc <span class="text-danger">*</span></label>
-                                <input type="datetime-local" name="end_at" class="form-control" required>
+                            <div class="row g-4">
+                                <div class="col-md-6">
+                                    <label class="form-label">Thời gian bắt đầu <span class="text-danger">*</span></label>
+                                    <input type="datetime-local" name="start_at" class="form-control" required>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Thời gian kết thúc <span class="text-danger">*</span></label>
+                                    <input type="datetime-local" name="end_at" class="form-control" required>
+                                </div>
                             </div>
                         </div>
 
-                        <hr class="my-4 border-light">
+                        {{-- PHẦN 2: BẢO MẬT & TRUY CẬP (ĐÃ CHUYỂN LÊN ĐÂY) --}}
+                        <div>
+                            <h6 class="form-section-title"><i class="bi bi-shield-lock me-2"></i> Bảo mật & Truy cập</h6>
+                            
+                            <div class="row g-4">
+                                {{-- Mật khẩu --}}
+                                <div class="col-md-6">
+                                    <label class="form-label">Mật khẩu tham gia (Tùy chọn)</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text bg-light border-end-0 text-muted"><i class="bi bi-key"></i></span>
+                                        <input type="text" name="password" class="form-control border-start-0 ps-0" placeholder="Để trống nếu thi công khai">
+                                    </div>
+                                    <div class="form-text text-muted mt-2 small">
+                                        Nếu đặt mật khẩu, học sinh phải nhập đúng mới được vào thi.
+                                    </div>
+                                </div>
 
-                        {{-- 4. Bảo mật & Danh sách thí sinh --}}
-                        <h6 class="fw-bold text-dark mb-3"><i class="bi bi-shield-lock me-2 text-primary"></i>Bảo mật & Thí sinh</h6>
-                        
-                        {{-- Mật khẩu tham gia --}}
-                        <div class="mb-4">
-                            <label class="form-label">Mật khẩu tham gia (Tùy chọn)</label>
-                            <div class="input-group">
-                                <span class="input-group-text bg-light border-0"><i class="bi bi-key"></i></span>
-                                <input type="text" 
-                                       name="password" 
-                                       class="form-control bg-light border-0" 
-                                       placeholder="Để trống nếu không cần mật khẩu">
-                            </div>
-                            <div class="form-text text-muted">
-                                <i class="bi bi-info-circle"></i> Nếu đặt mật khẩu, bất kỳ ai có mật khẩu đều có thể vào thi (kể cả không có trong danh sách).
-                            </div>
-                        </div>
-
-                        {{-- Upload danh sách --}}
-                        <div class="mb-4">
-                            <label class="form-label">Giới hạn danh sách thí sinh (Excel)</label>
-                            <div class="upload-box position-relative">
-                                <i class="bi bi-cloud-arrow-up text-primary fs-2 mb-2"></i>
-                                <p class="mb-2 fw-bold text-dark">Kéo thả file Excel hoặc click để chọn</p>
-                                <p class="small text-muted mb-0">Chỉ chấp nhận file .xlsx, .xls, .csv (Chứa cột Email)</p>
-                                <input type="file" 
-                                       name="student_file" 
-                                       class="position-absolute top-0 start-0 w-100 h-100 opacity-0 cursor-pointer" 
-                                       accept=".xlsx, .xls, .csv">
-                            </div>
-                            <div class="form-text text-muted mt-2">
-                                Hệ thống sẽ tự động thêm những Email <strong>đã có tài khoản</strong> vào kỳ thi này.
+                                {{-- Upload File --}}
+                                <div class="col-md-6">
+                                    <label class="form-label">Giới hạn danh sách (Excel)</label>
+                                    <div class="upload-area">
+                                        <div class="upload-icon"><i class="bi bi-cloud-arrow-up"></i></div>
+                                        <div class="fw-bold text-dark small mb-1">Chọn file .xlsx, .csv</div>
+                                        <input type="file" name="student_file" class="position-absolute top-0 start-0 w-100 h-100 opacity-0 cursor-pointer" accept=".xlsx,.xls,.csv">
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
-                        <hr class="my-4 border-light">
-
-                        {{-- Action Buttons --}}
-                        <div class="d-flex justify-content-end gap-2">
-                            <a href="{{ route('teacher.dashboard') }}" class="btn btn-light text-secondary fw-bold px-4">
-                                Hủy bỏ
-                            </a>
-                            <button type="submit" class="btn btn-indigo fw-bold px-4 shadow-sm">
-                                <i class="bi bi-check-circle me-1"></i> Hoàn tất & Tổ chức thi
-                            </button>
-                        </div>
-                    </form>
+                    </div>
                 </div>
             </div>
-        </div>
 
-        {{-- Side Note --}}
-        <div class="col-lg-4 d-none d-lg-block">
-            <div class="alert alert-light border shadow-sm rounded-3">
-                <h6 class="alert-heading fw-bold text-dark"><i class="bi bi-lightbulb-fill me-2 text-warning"></i>Lưu ý quan trọng</h6>
-                <ul class="small text-muted ps-3 mb-0">
-                    <li class="mb-2"><strong>Thời gian:</strong> Học sinh chỉ có thể làm bài trong khoảng thời gian "Bắt đầu" đến "Kết thúc".</li>
-                    <li class="mb-2"><strong>Đảo đề:</strong> Nếu đề gốc có bật chế độ "Đảo câu hỏi", mỗi học sinh sẽ nhận được một mã đề khác nhau.</li>
-                    <li><strong>Kết quả:</strong> Điểm số sẽ được cập nhật ngay sau khi học sinh nộp bài.</li>
-                </ul>
+            {{-- CỘT PHẢI: NÚT HÀNH ĐỘNG (STICKY) --}}
+            <div class="col-lg-3">
+                <div class="card card-custom bg-white sticky-top" style="top: 20px; z-index: 1;">
+                    <div class="card-body p-4">
+                        <h6 class="fw-bold text-dark mb-3">Tác vụ</h6>
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-gradient rounded-3 py-2">
+                                <i class="bi bi-check-circle-fill me-2"></i> Hoàn tất
+                            </button>
+                            <a href="{{ route('teacher.sessions.index') }}" class="btn btn-light text-secondary fw-bold rounded-3 py-2 border">
+                                Hủy bỏ
+                            </a>
+                        </div>
+                        
+                        <div class="alert alert-info bg-info bg-opacity-10 border-0 rounded-3 mt-4 mb-0 small">
+                            <div class="fw-bold mb-1"><i class="bi bi-lightbulb-fill me-1"></i> Lưu ý:</div>
+                            Khi tạo xong, hệ thống sẽ cấp một <strong>Mã dự thi</strong>. Hãy gửi mã này cho học sinh.
+                        </div>
+                    </div>
+                </div>
             </div>
+
         </div>
-    </div>
+    </form>
+
 </x-layouts.teacher>

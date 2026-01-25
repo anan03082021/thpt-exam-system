@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Auth;
 use App\Models\ExamSession;
 use App\Models\Exam;
 use App\Models\ExamAttempt;
-use Symfony\Component\HttpFoundation\StreamedResponse; // Dùng để xuất CSV
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ExamSessionController extends Controller
 {
@@ -22,7 +22,7 @@ class ExamSessionController extends Controller
         return view('teacher.sessions.index', compact('sessions'));
     }
 
-    // 2. Form tạo mới (Đã có từ trước - giữ nguyên hoặc tạo đơn giản)
+    // 2. Form tạo mới
     public function create()
     {
         $exams = Exam::where('creator_id', Auth::id())->get();
@@ -31,70 +31,68 @@ class ExamSessionController extends Controller
 
     public function store(Request $request)
     {
-        // Logic lưu kỳ thi (Start time, End time, Password...)
-        // Bạn tự bổ sung validate nhé
         ExamSession::create([
             'title' => $request->title,
             'exam_id' => $request->exam_id,
             'teacher_id' => Auth::id(),
             'start_at' => $request->start_at,
             'end_at' => $request->end_at,
-            // 'password' => $request->password,
+            'password' => $request->password, // Bỏ comment nếu dùng pass
         ]);
         return redirect()->route('teacher.sessions.index');
     }
 
     /**
      * 3. MÀN HÌNH GIÁM SÁT (MONITOR)
-     * Bao gồm: Thông tin, Danh sách HS, Thống kê câu hỏi
+     * Đã sửa lỗi crash khi đề thi gốc bị xóa
      */
     public function show($id)
     {
+        // Load session cùng với exam (nếu còn) và attempts
         $session = ExamSession::with(['exam.questions', 'attempts.user'])->findOrFail($id);
         
         // --- LOGIC THỐNG KÊ CÂU HỎI (ĐÚNG/SAI) ---
         $questionStats = [];
+        
         // Lấy tất cả các bài làm ĐÃ NỘP
         $attempts = $session->attempts->whereNotNull('submitted_at');
         
-        foreach ($session->exam->questions as $question) {
-            $correctCount = 0;
-            $wrongCount = 0;
-            $totalAnswered = 0;
+        // [QUAN TRỌNG] Kiểm tra xem Đề thi gốc có còn tồn tại không
+        if ($session->exam) {
+            foreach ($session->exam->questions as $question) {
+                $correctCount = 0;
+                $wrongCount = 0;
+                $totalAnswered = 0;
 
-            foreach ($attempts as $attempt) {
-                // Giả sử logic lưu bài làm của bạn là JSON: ['question_id' => 'answer']
-                // Hoặc bạn lưu bảng chi tiết exam_attempt_answers. 
-                // Ở đây tôi giả định bạn check dựa trên điểm số (nếu có lưu điểm từng câu)
-                // Demo logic đơn giản:
-                // Nếu chưa có bảng chi tiết, ta tạm bỏ qua hoặc phải decode JSON bài làm.
-                // Để demo, tôi set random. *Bạn cần thay bằng logic check đáp án thật của bạn*
-                $totalAnswered++;
-                $correctCount++; // Demo
+                foreach ($attempts as $attempt) {
+                    // Logic check đáp án của bạn (đang để demo)
+                    $totalAnswered++;
+                    $correctCount++; // Demo: coi như đúng hết, bạn cần thay logic thật
+                }
+                
+                // Tính tỷ lệ
+                $questionStats[$question->id] = [
+                    'content' => $question->content,
+                    'total' => $attempts->count(),
+                    'correct' => $correctCount,
+                    'wrong' => $attempts->count() - $correctCount,
+                    'ratio' => $attempts->count() > 0 ? round(($correctCount / $attempts->count()) * 100, 1) : 0
+                ];
             }
-            
-            // Tính tỷ lệ
-            $questionStats[$question->id] = [
-                'content' => $question->content,
-                'total' => $attempts->count(),
-                'correct' => $correctCount, // Thay bằng biến thật
-                'wrong' => $attempts->count() - $correctCount,
-                'ratio' => $attempts->count() > 0 ? round(($correctCount / $attempts->count()) * 100, 1) : 0
-            ];
         }
+        // Nếu đề thi bị xóa, $questionStats sẽ là mảng rỗng [], trang web vẫn chạy bình thường.
 
         return view('teacher.sessions.show', compact('session', 'questionStats'));
     }
 
     // 4. Chỉnh sửa
-public function edit($id)
-{
-    $session = ExamSession::findOrFail($id);
-    // Lấy danh sách đề thi của giáo viên này để có thể chọn lại đề khác nếu muốn
-    $exams = Exam::where('creator_id', Auth::id())->orderBy('created_at', 'desc')->get();
-    
-    return view('teacher.sessions.edit', compact('session', 'exams'));
-}
+    public function edit($id)
+    {
+        $session = ExamSession::findOrFail($id);
+        $exams = Exam::where('creator_id', Auth::id())->orderBy('created_at', 'desc')->get();
+        
+        return view('teacher.sessions.edit', compact('session', 'exams'));
+    }
 
     public function update(Request $request, $id)
     {
@@ -105,7 +103,6 @@ public function edit($id)
 
     /**
      * 5. XUẤT EXCEL (CSV)
-     * Không cần cài thư viện nặng, dùng StreamedResponse của PHP thuần
      */
     public function export($id)
     {
@@ -134,7 +131,7 @@ public function edit($id)
                 fputcsv($file, [
                     $attempt->user->id,
                     $attempt->user->name,
-                    $attempt->user->email, // Đã thêm Email theo yêu cầu
+                    $attempt->user->email,
                     $attempt->created_at->format('H:i d/m/Y'),
                     $attempt->submitted_at ? $attempt->submitted_at->format('H:i d/m/Y') : 'Chưa nộp',
                     $attempt->total_score,
@@ -146,35 +143,36 @@ public function edit($id)
 
         return new StreamedResponse($callback, 200, $headers);
     }
+
     /**
      * Xóa (Hủy) ca thi
      */
-    public function destroy($id)
+public function destroy($id)
     {
         try {
-            // 1. Tìm ca thi theo ID
+            // 1. Tìm ca thi
             $session = ExamSession::findOrFail($id);
 
-            // 2. Kiểm tra an toàn: Nếu đã có học sinh nộp bài thi (Attempt) thì không cho xóa
-            // (Giả sử bạn có quan hệ examAttempts trong model ExamSession)
-            if ($session->examAttempts()->count() > 0) {
-                return redirect()->route('teacher.sessions.index')
-                    ->with('error', 'Không thể xóa ca thi này vì đã có học sinh làm bài.');
-            }
+            // 2. [THAY ĐỔI QUAN TRỌNG] 
+            // Thay vì kiểm tra và chặn, ta thực hiện XÓA HẾT BÀI LÀM liên quan trước.
+            // Điều này giúp tránh lỗi khóa ngoại trong Database.
+            $session->attempts()->delete(); 
 
-            // 3. Xóa các dữ liệu liên quan (nếu Database không cài đặt Cascade Delete)
-            // Xóa danh sách học sinh được gán vào ca thi (nếu có)
-            $session->students()->delete(); 
+            // 3. Xóa danh sách học sinh được gán (nếu có dùng bảng trung gian session_student)
+            // Nếu dùng Eloquent relationship (Many-to-Many):
+            // $session->students()->detach(); 
+            // Hoặc nếu quan hệ 1-n:
+            // $session->students()->delete();
 
-            // 4. Xóa ca thi
+            // 4. Cuối cùng mới xóa Ca thi
             $session->delete();
 
             return redirect()->route('teacher.sessions.index')
-                ->with('success', 'Đã xóa ca thi thành công.');
+                ->with('success', 'Đã xóa ca thi và toàn bộ dữ liệu bài làm liên quan.');
 
         } catch (\Exception $e) {
             return redirect()->route('teacher.sessions.index')
-                ->with('error', 'Có lỗi xảy ra: ' . $e->getMessage());
+                ->with('error', 'Lỗi hệ thống: ' . $e->getMessage());
         }
     }
-}   
+}
