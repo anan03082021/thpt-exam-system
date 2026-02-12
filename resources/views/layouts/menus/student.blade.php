@@ -12,7 +12,7 @@
     <a class="nav-link {{ request()->routeIs('student.practice') ? 'active' : '' }}" 
        href="{{ route('student.practice') }}">
         <i class="bi bi-journal-text"></i>
-        <span>{{ __('Đề thi') }}</span>
+        <span>{{ __('Ôn luyện') }}</span>
     </a>
 </li>
 

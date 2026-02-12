@@ -27,10 +27,12 @@ class ExamController extends Controller
     public function takeExam($sessionId)
     {
         // A. Lấy thông tin Ca thi & Câu hỏi
-        $session = ExamSession::with(['exam.questions' => function($q) {
-            $q->whereNull('parent_id')
-              ->with(['answers', 'children.answers']);
-        }])->findOrFail($sessionId);
+$session = ExamSession::with(['exam.questions' => function($q) {
+        $q->whereNull('parent_id')
+          ->with(['answers', 'children.answers'])
+          ->withPivot('order') // Lấy cột order từ bảng trung gian
+          ->orderBy('exam_questions.order', 'asc'); // Sắp xếp đúng thứ tự đã soạn
+    }])->findOrFail($sessionId);
 
         // B. Validate: Kiểm tra thời gian
         $now = now();
@@ -51,31 +53,29 @@ class ExamController extends Controller
         $hasAccessByPassword = session()->has($sessionKey);
 
         // Cho phép nếu có trong danh sách, hoặc đã nhập mật khẩu, hoặc là bài luyện tập (id=0)
-        if ($isWhitelisted || $hasAccessByPassword || $sessionId == 0) {
-            $exam = $session->exam;
+if ($isWhitelisted || $hasAccessByPassword || $sessionId == 0) {
+        $exam = $session->exam;
+        $allQuestions = $exam->questions;
 
-            // [QUAN TRỌNG] --- PHÂN LOẠI CÂU HỎI VỚI LOGIC CHẶT CHẼ (TRIM + LOWERCASE) ---
-            $allQuestions = $exam->questions;
+        // Phân loại giữ nguyên logic của bạn
+        $chungQuestions = $allQuestions->filter(function($q) {
+            $val = strtolower(trim($q->orientation ?? '')); 
+            return $val === 'chung' || $val === '';
+        })->values(); // Thêm values() để reset index mảng
 
-            $chungQuestions = $allQuestions->filter(function($q) {
-                // Chuẩn hóa: Cắt khoảng trắng, chuyển về chữ thường
-                $val = strtolower(trim($q->orientation ?? '')); 
-                // Chấp nhận: 'chung', rỗng, hoặc null
-                return $val === 'chung' || $val === '';
-            });
+        $csQuestions = $allQuestions->filter(function($q) {
+            return strtolower(trim($q->orientation ?? '')) === 'cs';
+        })->values();
 
-            $csQuestions = $allQuestions->filter(function($q) {
-                $val = strtolower(trim($q->orientation ?? ''));
-                return $val === 'cs';
-            });
+        $ictQuestions = $allQuestions->filter(function($q) {
+            return strtolower(trim($q->orientation ?? '')) === 'ict';
+        })->values();
 
-            $ictQuestions = $allQuestions->filter(function($q) {
-                $val = strtolower(trim($q->orientation ?? ''));
-                return $val === 'ict';
-            });
+        // Lấy elective từ session để truyền sang View tránh lỗi Undefined
+        $savedElective = session('elective_choice_' . $sessionId, '');
 
-            return view('exam.take', compact('exam', 'session', 'chungQuestions', 'csQuestions', 'ictQuestions'));
-        }
+        return view('exam.take', compact('exam', 'session', 'chungQuestions', 'csQuestions', 'ictQuestions', 'savedElective'));
+    }
 
         // E. Form nhập mật khẩu
         if (!empty($session->password)) {
@@ -204,54 +204,73 @@ class ExamController extends Controller
     // =========================================================================
     // 4. BẮT ĐẦU LUYỆN TẬP
     // =========================================================================
-    public function startPractice($examId)
-    {
-        $exam = Exam::with(['questions' => function($q) {
-            $q->whereNull('parent_id')->with(['answers', 'children.answers']);
-        }])->findOrFail($examId);
+public function startPractice($examId)
+{
+    $exam = Exam::with(['questions' => function($q) {
+        $q->whereNull('parent_id')
+          ->with(['answers', 'children.answers'])
+          ->withPivot('order')
+          ->orderBy('exam_questions.order', 'asc');
+    }])->findOrFail($examId);
 
-        // Tạo session giả lập
-        $session = new ExamSession();
-        $session->id = 0; 
-        $session->title = "Luyện tập: " . $exam->title;
-        $session->exam_id = $exam->id;
-        $session->start_at = now();
-        $session->end_at = now()->addMinutes($exam->duration);
+    // Tạo session giả lập
+    $session = new ExamSession();
+    $session->id = 0; 
+    $session->title = "Luyện tập: " . $exam->title;
+    $session->exam_id = $exam->id;
+    $session->start_at = now();
+    $session->end_at = now()->addMinutes($exam->duration);
 
-        // Tái sử dụng logic phân loại
-        $allQuestions = $exam->questions;
-        
-        $chungQuestions = $allQuestions->filter(function($q) {
-            $val = strtolower(trim($q->orientation ?? ''));
-            return $val === 'chung' || $val === '';
-        });
-        $csQuestions = $allQuestions->filter(function($q) {
-            return strtolower(trim($q->orientation ?? '')) === 'cs';
-        });
-        $ictQuestions = $allQuestions->filter(function($q) {
-            return strtolower(trim($q->orientation ?? '')) === 'ict';
-        });
+    $allQuestions = $exam->questions;
+    
+    // Thêm values() để đồng bộ index 0, 1, 2...
+    $chungQuestions = $allQuestions->filter(fn($q) => in_array(strtolower(trim($q->orientation ?? '')), ['chung', '']))->values();
+    $csQuestions = $allQuestions->filter(fn($q) => strtolower(trim($q->orientation ?? '')) === 'cs')->values();
+    $ictQuestions = $allQuestions->filter(fn($q) => strtolower(trim($q->orientation ?? '')) === 'ict')->values();
 
-        return view('exam.take', compact('exam', 'session', 'chungQuestions', 'csQuestions', 'ictQuestions'));
-    }
+    $savedElective = session('elective_choice_0', '');
 
-    // =========================================================================
-    // 5. LỊCH SỬ THI
+    return view('exam.take', compact('exam', 'session', 'chungQuestions', 'csQuestions', 'ictQuestions', 'savedElective'));
+}
+
+// =========================================================================
+    // 5. LỊCH SỬ THI (CÁCH: LỌC THỦ CÔNG - ĐẢM BẢO 100% SẠCH)
     // =========================================================================
     public function history()
     {
-        $attempts = ExamAttempt::with(['exam', 'examSession'])
+        // 1. Lấy tất cả bài làm của user về trước
+        $allAttempts = ExamAttempt::with(['exam', 'examSession'])
             ->where('user_id', Auth::id())
             ->orderBy('submitted_at', 'desc')
             ->get();
 
-        $examAttempts = $attempts->filter(function ($item) {
-            return !empty($item->exam_session_id) && $item->exam_session_id != 0;
+        // 2. Lọc bỏ dữ liệu rác bằng PHP (Vòng lặp kiểm tra từng cái)
+        $validAttempts = $allAttempts->filter(function ($attempt) {
+            // Kiểm tra 1: Đề thi gốc có còn tồn tại không?
+            if (!$attempt->exam) {
+                return false; // Không còn -> Loại bỏ
+            }
+
+            // Kiểm tra 2: Nếu là Thi Chính Thức (có session_id), thì Kỳ thi có còn không?
+            // (Lưu ý: session_id = 0 là luyện tập, không cần kiểm tra session)
+            if (!empty($attempt->exam_session_id) && $attempt->exam_session_id != 0) {
+                if (!$attempt->examSession) {
+                    return false; // Kỳ thi bị xóa rồi -> Loại bỏ
+                }
+            }
+
+            return true; // Dữ liệu hợp lệ -> Giữ lại
         });
 
-        $practiceAttempts = $attempts->filter(function ($item) {
+        // 3. Phân loại từ danh sách đã làm sạch ($validAttempts)
+        // Dùng values() để reset lại key mảng cho View dễ xử lý
+        $examAttempts = $validAttempts->filter(function ($item) {
+            return !empty($item->exam_session_id) && $item->exam_session_id != 0;
+        })->values();
+
+        $practiceAttempts = $validAttempts->filter(function ($item) {
             return empty($item->exam_session_id) || $item->exam_session_id == 0;
-        });
+        })->values();
 
         return view('history', compact('examAttempts', 'practiceAttempts'));
     }

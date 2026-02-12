@@ -1,4 +1,4 @@
-<x-layouts.teacher title="Ngân hàng câu hỏi">
+<x-layouts.shared title="Ngân hàng câu hỏi">
 
     {{-- Custom CSS nhỏ để làm đẹp thêm --}}
     @push('styles')
@@ -299,4 +299,4 @@
     </script>
     @endpush
 
-</x-layouts.teacher>
+</x-layouts.shared>

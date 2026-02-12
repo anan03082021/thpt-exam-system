@@ -1,4 +1,4 @@
-<x-layouts.teacher title="Quản lý tài liệu">
+<x-layouts.shared title="Quản lý tài liệu">
     @push('styles')
     <style>
         .file-icon { font-size: 1.5rem; }
@@ -175,4 +175,4 @@
             </div>
         </div>
     </div>
-</x-layouts.teacher>
+</x-layouts.shared>

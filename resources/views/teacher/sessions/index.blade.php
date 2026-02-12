@@ -1,4 +1,4 @@
-<x-layouts.teacher title="Quản lý Ca thi">
+<x-layouts.shared title="Quản lý Ca thi">
 
     @push('styles')
     <style>
@@ -301,4 +301,4 @@
     </script>
     @endpush
 
-</x-layouts.teacher>
+</x-layouts.shared>

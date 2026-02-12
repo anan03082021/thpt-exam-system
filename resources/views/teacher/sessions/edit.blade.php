@@ -1,4 +1,4 @@
-<x-layouts.teacher title="Chỉnh sửa Ca thi">
+<x-layouts.shared title="Chỉnh sửa Ca thi">
 
     <div class="container-fluid p-0" style="max-width: 800px;">
         {{-- Breadcrumb --}}
@@ -80,4 +80,4 @@
         </div>
     </div>
 
-</x-layouts.teacher>
+</x-layouts.shared>

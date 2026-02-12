@@ -1,428 +1,304 @@
-<x-layouts.teacher title="Chỉnh sửa đề thi #{{ $exam->id }}">
-
+<x-layouts.shared title="Chỉnh sửa đề thi #{{ $exam->id }}">
     @push('styles')
     <style>
-        /* CSS đồng bộ với trang Create */
         .card-header-custom { background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%); color: white; }
-        .filter-box { background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; }
-        .question-checkbox { width: 1.2em; height: 1.2em; cursor: pointer; border-color: #cbd5e1; }
-        .question-checkbox:checked { background-color: #4f46e5; border-color: #4f46e5; }
-        .sticky-sidebar { top: 100px; z-index: 99; }
-        
-        /* Badges */
-        .badge-type-sc { background-color: #0ea5e9; } 
-        .badge-type-tf { background-color: #f59e0b; }
-        .badge-orient-chung { background-color: #64748b; }
-        .badge-orient-cs { background-color: #4f46e5; }
-        .badge-orient-ict { background-color: #059669; }
+        .sticky-sidebar { position: sticky; top: 10px; z-index: 100; }
+        .q-item { transition: all 0.2s; border-left: 5px solid transparent; background: #fff; }
+        .q-item:hover { background-color: #f8fafc; }
+        .q-item.selected { border-left-color: #4f46e5; }
+        .answer-list { display: none; }
+        .cursor-pointer { cursor: pointer; }
+        .chevron-icon { transition: transform 0.3s ease; }
+        .rotate-180 { transform: rotate(180deg); }
+        .ans-row { padding: 10px 15px; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 8px; display: flex; align-items: center; font-size: 0.9rem; }
+        .ans-correct { background-color: #f0fdf4; border-color: #86efac; color: #166534; font-weight: 600; }
+        .border-dashed { border-style: dashed !important; }
+        .drag-handle { cursor: grab; padding: 5px; color: #cbd5e1; transition: color 0.2s; }
+        .drag-handle:hover { color: #4f46e5; }
+        .drag-handle:active { cursor: grabbing; }
+        .sortable-ghost { opacity: 0.4; background-color: #f1f5f9 !important; border: 2px dashed #4f46e5 !important; }
+        [x-cloak] { display: none !important; }
     </style>
     @endpush
 
-    <nav aria-label="breadcrumb" class="mb-4">
-        <ol class="breadcrumb">
-            <li class="breadcrumb-item"><a href="{{ route('teacher.dashboard') }}" class="text-decoration-none text-muted">Dashboard</a></li>
-            <li class="breadcrumb-item"><a href="{{ route('teacher.exams.index') }}" class="text-decoration-none text-muted">Đề thi</a></li>
-            <li class="breadcrumb-item active text-primary fw-bold">Chỉnh sửa: {{ $exam->title }}</li>
-        </ol>
-    </nav>
-
-    <div class="container-fluid p-0">
-        
-        {{-- 1. BỘ LỌC CÂU HỎI --}}
-        <div class="card shadow-sm mb-4 border-0 rounded-4">
-            <div class="card-header bg-white fw-bold border-bottom py-3">
-                <i class="bi bi-funnel-fill text-primary me-2"></i> Bộ lọc câu hỏi thêm
-            </div>
-            <div class="card-body filter-box m-3">
-                <form action="{{ route('teacher.exams.edit', $exam->id) }}" method="GET">
-                    <div class="row g-3">
-                        <div class="col-md-2">
-                            <label class="form-label small text-muted fw-bold">Lớp</label>
-                            <select name="grade" class="form-select form-select-sm border-0 shadow-sm">
-                                <option value="">-- Tất cả --</option>
-                                <option value="10" {{ request('grade') == '10' ? 'selected' : '' }}>Lớp 10</option>
-                                <option value="11" {{ request('grade') == '11' ? 'selected' : '' }}>Lớp 11</option>
-                                <option value="12" {{ request('grade') == '12' ? 'selected' : '' }}>Lớp 12</option>
-                            </select>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label small text-muted fw-bold">Chủ đề</label>
-                            <select name="topic_id" class="form-select form-select-sm border-0 shadow-sm">
-                                <option value="">-- Tất cả --</option>
-                                @foreach($topics as $topic)
-                                    <option value="{{ $topic->id }}" {{ request('topic_id') == $topic->id ? 'selected' : '' }}>
-                                        {{ $topic->name }}
-                                    </option>
-                                @endforeach
-                            </select>
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label small text-muted fw-bold">Định hướng</label>
-                            <select name="orientation" class="form-select form-select-sm border-0 shadow-sm">
-                                <option value="">-- Tất cả --</option>
-                                <option value="chung" {{ request('orientation') == 'chung' ? 'selected' : '' }}>Chung</option>
-                                <option value="cs" {{ request('orientation') == 'cs' ? 'selected' : '' }}>CS</option>
-                                <option value="ict" {{ request('orientation') == 'ict' ? 'selected' : '' }}>ICT</option>
-                            </select>
-                        </div>
-                        {{-- Các bộ lọc khác giữ nguyên nếu cần --}}
-                        
-                        <div class="col-12 text-end pt-2">
-                            <a href="{{ route('teacher.exams.edit', $exam->id) }}" class="btn btn-light btn-sm me-2">Đặt lại</a>
-                            <button type="submit" class="btn btn-primary btn-sm px-4 fw-bold shadow-sm">
-                                <i class="bi bi-search me-1"></i> Tìm kiếm
-                            </button>
-                        </div>
+    <div class="container-fluid p-0" x-data="examEditor()" x-init="init()" x-cloak>
+        <div class="row g-4">
+            {{-- CỘT TRÁI: QUẢN LÝ CÂU HỎI TRONG ĐỀ --}}
+            <div class="col-md-8">
+                <div class="card shadow-sm border-0 rounded-4 overflow-hidden mb-5 text-dark">
+                    <div class="card-header bg-white border-bottom p-3">
+                        <h5 class="mb-0 fw-bold text-primary">
+                            <i class="bi bi-list-ol me-2"></i>Danh sách câu hỏi (<span x-text="bankQuestions.length"></span>)
+                        </h5>
                     </div>
-                </form>
+
+                    <div class="card-body p-4">
+                        {{-- Form chính dùng để lưu --}}
+                        <form id="editExamForm" action="{{ route('teacher.exams.update', $exam->id) }}" method="POST">
+                            @csrf
+                            @method('PUT')
+                            <input type="hidden" name="question_ids" :value="bankQuestions.map(q => q.id).join(',')">
+                            
+                            {{-- Input ẩn để gửi nội dung sửa đổi --}}
+                            <template x-for="q in bankQuestions" :key="'hidden-'+q.id">
+                                <div>
+                                    <input type="hidden" :name="'edited_contents['+q.id+']'" :value="q.content">
+                                    <input type="hidden" :name="'edited_answers['+q.id+']'" :value="JSON.stringify(q.answers)">
+                                </div>
+                            </template>
+
+                            <div x-ref="sortableContainer">
+                                <template x-if="bankQuestions.length === 0">
+                                    <div class="text-center py-5 text-muted border rounded-3 border-dashed">
+                                        <i class="bi bi-inbox fs-1 d-block mb-2 opacity-50"></i>
+                                        Chưa có câu hỏi nào trong đề thi này.
+                                    </div>
+                                </template>
+                                
+                                <template x-for="(q, index) in bankQuestions" :key="q.id">
+                                    <div class="p-3 mb-3 border rounded-3 q-item selected shadow-sm bg-white" :data-id="q.id">
+                                        <div class="d-flex justify-content-between align-items-start">
+                                            {{-- Tay cầm kéo thả --}}
+                                            <div class="drag-handle me-2" title="Kéo để sắp xếp"><i class="bi bi-grip-vertical fs-5"></i></div>
+                                            
+                                            <div class="flex-grow-1 pe-3">
+                                                {{-- Chế độ Xem --}}
+                                                <div x-show="!q.isEditing" @click="toggleAccordion(q.id)" class="cursor-pointer">
+                                                    <div class="d-flex align-items-center mb-1">
+                                                        <span class="badge bg-primary me-2" x-text="index + 1"></span>
+                                                        <span class="badge border small text-white" :class="getLevelClass(q.level)" x-text="getLevelName(q.level)"></span>
+                                                        <i class="bi bi-chevron-down ms-2 small text-muted chevron-icon" :id="'icon-' + q.id"></i>
+                                                    </div>
+                                                    <div class="text-dark fw-bold d-inline ms-1" x-html="limitText(q.content, 150)"></div>
+                                                </div>
+                                                
+                                                {{-- Chế độ Sửa nội dung câu hỏi --}}
+                                                <div x-show="q.isEditing" class="mt-2">
+                                                    <label class="small fw-bold text-muted mb-1">Nội dung câu hỏi</label>
+                                                    <textarea class="form-control mb-2 fw-bold shadow-none" rows="3" x-model="q.content"></textarea>
+                                                </div>
+                                            </div>
+
+                                            {{-- Nút thao tác --}}
+                                            <div class="d-flex gap-1">
+                                                <button type="button" @click="q.isEditing = !q.isEditing" class="btn btn-sm btn-outline-primary border-0 shadow-none" title="Chỉnh sửa">
+                                                    <i class="bi" :class="q.isEditing ? 'bi-check-lg' : 'bi-pencil-square'"></i>
+                                                </button>
+                                                <button type="button" @click="removeQuestion(q.id)" class="btn btn-sm btn-outline-danger border-0 shadow-none" title="Xóa khỏi đề">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {{-- Chi tiết đáp án (Accordion) --}}
+                                        <div :id="'ans-' + q.id" class="answer-list mt-3" :style="q.isEditing ? 'display: block' : ''">
+                                            <div class="p-3 bg-light rounded-3 border text-dark shadow-inner small">
+                                                <div class="fw-bold text-primary mb-2 text-uppercase">Đáp án chi tiết:</div>
+                                                <div class="bg-white p-2 border rounded">
+                                                    
+                                                    {{-- Trường hợp Trắc nghiệm 1 lựa chọn --}}
+                                                    <template x-if="q.q_type === 'single_choice'">
+                                                        <div class="d-flex flex-column gap-2">
+                                                            <template x-for="(ans, i) in q.answers" :key="i">
+                                                                <div>
+                                                                    {{-- Xem đáp án --}}
+                                                                    <div x-show="!q.isEditing" class="ans-row border" :class="ans.is_correct ? 'ans-correct' : ''">
+                                                                        <span class="fw-bold me-2" x-text="String.fromCharCode(65 + i) + '.'"></span>
+                                                                        <span x-text="ans.content"></span>
+                                                                        <template x-if="ans.is_correct"><i class="bi bi-check-circle-fill ms-auto text-success"></i></template>
+                                                                    </div>
+                                                                    {{-- Sửa đáp án --}}
+                                                                    <div x-show="q.isEditing" class="input-group input-group-sm mb-1">
+                                                                        <span class="input-group-text fw-bold" x-text="String.fromCharCode(65 + i)"></span>
+                                                                        <input type="text" class="form-control" x-model="ans.content">
+                                                                        <div class="input-group-text bg-white">
+                                                                            <input class="form-check-input mt-0" type="radio" :name="'correct_radio_' + q.id" :checked="ans.is_correct" @change="q.answers.forEach((a, idx) => a.is_correct = (idx === i))">
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </template>
+                                                        </div>
+                                                    </template>
+
+                                                    {{-- Trường hợp Đúng/Sai --}}
+                                                    <template x-if="q.q_type === 'true_false_group'">
+                                                        <table class="table table-sm table-bordered bg-white mb-0 align-middle">
+                                                            <thead class="table-secondary small text-center">
+                                                                <tr><th>Ý nhận định</th><th width="80">Đáp án</th></tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                <template x-for="(ans, i) in q.answers" :key="i">
+                                                                    <tr>
+                                                                        <td>
+                                                                            <div x-show="!q.isEditing" class="p-1" x-text="ans.content"></div>
+                                                                            <textarea x-show="q.isEditing" class="form-control form-control-sm border-0" x-model="ans.content" rows="2"></textarea>
+                                                                        </td>
+                                                                        <td class="text-center">
+                                                                            <div x-show="!q.isEditing" class="fw-bold text-primary" x-text="ans.is_correct ? 'Đúng' : 'Sai'"></div>
+                                                                            <select x-show="q.isEditing" class="form-select form-select-sm border-0 fw-bold text-primary" x-model="ans.is_correct">
+                                                                                <option :value="true">Đúng</option>
+                                                                                <option :value="false">Sai</option>
+                                                                            </select>
+                                                                        </td>
+                                                                    </tr>
+                                                                </template>
+                                                            </tbody>
+                                                        </table>
+                                                    </template>
+
+                                                </div>
+                                                {{-- Nút Xong khi sửa --}}
+                                                <div x-show="q.isEditing" class="mt-2 text-end">
+                                                    <button type="button" @click="q.isEditing = false" class="btn btn-sm btn-primary px-3 shadow-sm">Hoàn tất</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            {{-- CỘT PHẢI: INFO & SIDEBAR --}}
+            <div class="col-md-4">
+                <div class="card shadow-lg border-0 rounded-4 sticky-sidebar text-dark">
+                    <div class="card-header card-header-custom p-3 rounded-top-4">
+                        <h6 class="mb-0 fw-bold"><i class="bi bi-info-circle me-2"></i>Thông tin đề thi</h6>
+                    </div>
+                    <div class="card-body p-4">
+                        {{-- Tiêu đề --}}
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-muted text-uppercase">Tiêu đề đề thi</label>
+                            <input type="text" form="editExamForm" name="title" class="form-control fw-bold shadow-none" value="{{ $exam->title }}" required>
+                        </div>
+
+                        {{-- [MỚI] Phần Mô tả đề thi --}}
+                        <div class="mb-3" x-data="{ desc: @js($exam->description ?? '') }">
+                            <label class="form-label small fw-bold text-muted text-uppercase d-flex justify-content-between">
+                                Mô tả / Ghi chú
+                                <span class="fw-normal text-muted" style="font-size: 0.7em" x-text="(desc ? desc.length : 0) + '/255'"></span>
+                            </label>
+                            <textarea form="editExamForm" name="description" class="form-control shadow-none text-secondary" rows="3" maxlength="255" x-model="desc" placeholder="Nhập ghi chú hoặc hướng dẫn làm bài..."></textarea>
+                        </div>
+
+                        {{-- Thời gian & Trạng thái --}}
+                        <div class="row g-2 mb-4">
+                            <div class="col-6">
+                                <label class="small fw-bold text-muted">THỜI GIAN (PHÚT)</label>
+                                <input type="number" form="editExamForm" name="duration" class="form-control shadow-none" value="{{ $exam->duration }}" required>
+                            </div>
+                            <div class="col-6">
+                                <label class="small fw-bold text-muted">TRẠNG THÁI</label>
+                                <select form="editExamForm" name="is_public" class="form-select small shadow-none">
+                                    <option value="1" {{ $exam->is_public ? 'selected' : '' }}>Công khai</option>
+                                    <option value="0" {{ !$exam->is_public ? 'selected' : '' }}>Nháp</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        {{-- Ma trận --}}
+                        <div class="p-3 bg-light border border-dashed rounded-3 mb-4 shadow-none">
+                            <h6 class="fw-bold small border-bottom pb-2 mb-3 text-uppercase">Thống kê</h6>
+                            <div class="d-flex flex-column gap-2 small">
+                                <div class="d-flex justify-content-between border-bottom pb-1 mb-1">
+                                    <span>Tổng số câu:</span><strong class="text-primary h5 mb-0" x-text="bankQuestions.length"></strong>
+                                </div>
+                                <div class="d-flex justify-content-between"><span>Nhận biết:</span><strong class="text-success" x-text="countLevel('easy')"></strong></div>
+                                <div class="d-flex justify-content-between"><span>Thông hiểu:</span><strong class="text-primary" x-text="countLevel('medium')"></strong></div>
+                                <div class="d-flex justify-content-between"><span>Vận dụng:</span><strong class="text-warning" x-text="countLevel('hard')"></strong></div>
+                            </div>
+                        </div>
+                        
+                        <button type="submit" form="editExamForm" class="btn btn-primary w-100 fw-bold py-3 shadow-lg rounded-3">CẬP NHẬT ĐỀ THI</button>
+                    </div>
+                </div>
             </div>
         </div>
-
-        {{-- 2. FORM SỬA ĐỀ --}}
-        <form action="{{ route('teacher.exams.update', $exam->id) }}" method="POST" id="editExamForm">
-            @csrf
-            @method('PUT')
-            
-            <div class="row g-4">
-                {{-- Cột Trái: Danh sách câu hỏi --}}
-                <div class="col-md-8">
-                    <div class="card shadow-sm border-0 rounded-4 mb-5">
-                        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
-                            <h6 class="mb-0 fw-bold text-dark">
-                                <i class="bi bi-list-task text-primary me-2"></i> Kết quả tìm kiếm
-                            </h6>
-                            <div class="form-check form-switch">
-                                <input class="form-check-input" type="checkbox" id="checkAll">
-                                <label class="form-check-label small fw-bold text-muted" for="checkAll">Chọn tất cả trang này</label>
-                            </div>
-                        </div>
-
-                        <div class="table-responsive">
-                            <table class="table table-hover mb-0 align-middle">
-                                <thead class="bg-light text-secondary small text-uppercase">
-                                    <tr>
-                                        <th width="50" class="text-center">#</th>
-                                        <th>Nội dung</th>
-                                        <th width="150">Phân loại</th>
-                                        <th width="50"></th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @forelse($questions as $q)
-                                        <tr>
-                                            <td class="text-center">
-                                                <input class="form-check-input question-checkbox" 
-                                                       type="checkbox" 
-                                                       value="{{ $q->id }}" 
-                                                       data-type="{{ $q->orientation ?? 'chung' }}"
-                                                       onchange="toggleQuestion('{{ $q->id }}', this.checked, '{{ $q->orientation ?? 'chung' }}')">
-                                            </td>
-                                            <td>
-                                                <div class="fw-bold text-dark text-truncate" style="max-width: 450px;">
-                                                    {{ Str::limit($q->content, 100) }}
-                                                </div>
-                                                @if($q->competency)
-                                                    <div class="small text-muted mt-1">
-                                                        <i class="bi bi-lightning-charge-fill text-warning"></i> {{ $q->competency->code }}
-                                                    </div>
-                                                @endif
-                                            </td>
-                                            <td>
-                                                {{-- Badge định hướng --}}
-                                                @if($q->orientation == 'cs')
-                                                    <span class="badge badge-orient-cs text-white border me-1">CS</span>
-                                                @elseif($q->orientation == 'ict')
-                                                    <span class="badge badge-orient-ict text-white border me-1">ICT</span>
-                                                @else
-                                                    <span class="badge badge-orient-chung text-white border me-1">Chung</span>
-                                                @endif
-                                                
-                                                <span class="badge bg-light text-dark border">Lớp {{ $q->grade }}</span>
-                                            </td>
-                                            <td>
-                                                {{-- Tìm đoạn nút bấm hình con mắt cũ và thay thế bằng đoạn này --}}
-<button type="button" 
-        class="btn btn-sm btn-outline-primary rounded-circle shadow-sm" 
-        title="Xem chi tiết"
-        data-question='@json($q)' 
-        onclick="showQuestionPreview(this)">
-    <i class="bi bi-eye"></i>
-</button>
-                                            </td>
-                                        </tr>
-                                    @empty
-                                        <tr>
-                                            <td colspan="4" class="text-center py-5 text-muted">Không tìm thấy câu hỏi nào.</td>
-                                        </tr>
-                                    @endforelse
-                                </tbody>
-                            </table>
-                        </div>
-                        <div class="card-footer bg-white border-0 py-3">
-                            {{ $questions->withQueryString()->links() }}
-                        </div>
-                    </div>
-                </div>
-
-                {{-- Cột Phải: Thông tin đề thi --}}
-                <div class="col-md-4">
-                    <div class="card shadow-lg border-0 rounded-4 sticky-sidebar">
-                        <div class="card-header card-header-custom text-white fw-bold py-3 rounded-top-4">
-                            <i class="bi bi-pencil-square me-2"></i> Thông tin đề thi
-                        </div>
-                        <div class="card-body p-4">
-                            <div class="mb-3">
-                                <label class="form-label fw-bold">Tên đề thi <span class="text-danger">*</span></label>
-                                <input type="text" name="title" class="form-control" value="{{ $exam->title }}" required>
-                            </div>
-                            
-                            <div class="mb-3">
-                                <label class="form-label fw-bold">Thời gian (phút) <span class="text-danger">*</span></label>
-                                <input type="number" name="duration" class="form-control" value="{{ $exam->duration }}" required>
-                            </div>
-
-                            <div class="mb-4">
-                                <label class="form-label fw-bold mb-2">Trạng thái phát hành</label>
-                                <div class="card p-3 border shadow-sm bg-light">
-                                    <div class="form-check form-switch">
-                                        <input class="form-check-input" type="checkbox" name="is_public" id="isPublicSwitch" value="1" 
-                                            {{ $exam->is_public ? 'checked' : '' }}>
-                                        <label class="form-check-label fw-bold ms-2" for="isPublicSwitch">Công khai</label>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {{-- BỘ ĐẾM CHI TIẾT (ĐÃ NÂNG CẤP) --}}
-                            <div class="p-3 rounded-3 mb-3 bg-white border border-primary border-opacity-25" style="border-style: dashed !important;">
-                                <div class="d-flex justify-content-between align-items-center mb-2 border-bottom pb-2">
-                                    <span class="fw-bold text-dark small text-uppercase">Tổng đã chọn</span>
-                                    <span class="h4 fw-bold text-primary mb-0" id="totalCount">0</span>
-                                </div>
-                                <div class="small">
-                                    <div class="d-flex justify-content-between mb-1">
-                                        <span class="text-muted"><i class="bi bi-layers me-1"></i> Phần Chung:</span>
-                                        <span class="fw-bold text-dark" id="countChung">0</span>
-                                    </div>
-                                    <div class="d-flex justify-content-between mb-1">
-                                        <span class="text-primary"><i class="bi bi-cpu me-1"></i> Phần CS:</span>
-                                        <span class="fw-bold text-primary" id="countCS">0</span>
-                                    </div>
-                                    <div class="d-flex justify-content-between">
-                                        <span class="text-success"><i class="bi bi-laptop me-1"></i> Phần ICT:</span>
-                                        <span class="fw-bold text-success" id="countICT">0</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <input type="hidden" name="question_ids" id="finalQuestionIds">
-
-                            <button type="button" onclick="submitEditForm()" class="btn btn-primary w-100 fw-bold py-3 shadow-lg rounded-3">
-                                <i class="bi bi-save me-1"></i> LƯU THAY ĐỔI
-                            </button>
-                            <a href="{{ route('teacher.exams.index') }}" class="btn btn-light w-100 mt-2 text-muted">Hủy bỏ</a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </form>
     </div>
 
     @push('scripts')
-    {{-- ======================================================= --}}
-{{-- MODAL XEM NHANH CÂU HỎI --}}
-{{-- ======================================================= --}}
-<div class="modal fade" id="questionPreviewModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
-        <div class="modal-content border-0 shadow-lg rounded-4">
-            <div class="modal-header bg-primary text-white">
-                <h5 class="modal-title fw-bold">
-                    <i class="bi bi-search me-2"></i> Chi tiết câu hỏi
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body p-4" id="previewContent">
-                {{-- Nội dung sẽ được JS nạp vào đây --}}
-            </div>
-            <div class="modal-footer bg-light">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<script>
-    function showQuestionPreview(button) {
-        // 1. Lấy dữ liệu từ nút bấm
-        const q = JSON.parse(button.getAttribute('data-question'));
-        const modalBody = document.getElementById('previewContent');
-        let html = '';
-
-        // 2. Tạo Badge hiển thị loại câu hỏi
-        let typeBadge = '';
-        if (q.type === 'single_choice') typeBadge = '<span class="badge bg-info text-dark">Trắc nghiệm</span>';
-        else typeBadge = '<span class="badge bg-warning text-dark">Đúng/Sai chùm</span>';
-
-        // 3. Hiển thị nội dung câu hỏi gốc
-        html += `
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                ${typeBadge}
-                <span class="badge bg-light text-secondary border">ID: ${q.id}</span>
-            </div>
-            <div class="p-3 bg-light rounded-3 border mb-4">
-                <h6 class="fw-bold text-primary mb-2">Nội dung câu hỏi:</h6>
-                <div class="fs-5">${q.content}</div>
-            </div>
-        `;
-
-        // 4. Xử lý hiển thị đáp án theo loại
-        html += '<h6 class="fw-bold text-dark mb-3">Đáp án / Câu hỏi thành phần:</h6>';
-
-        // --- TRƯỜNG HỢP A: TRẮC NGHIỆM ---
-        if (q.type === 'single_choice' && q.answers) {
-            html += '<div class="list-group">';
-            q.answers.forEach((ans, index) => {
-                // Tô màu xanh nếu là đáp án đúng
-                let itemClass = ans.is_correct == 1 
-                    ? 'list-group-item-success fw-bold border-success' 
-                    : 'list-group-item-light';
-                
-                let icon = ans.is_correct == 1 
-                    ? '<i class="bi bi-check-circle-fill text-success me-2"></i>' 
-                    : '<i class="bi bi-circle text-muted me-2"></i>';
-
-                html += `
-                    <div class="list-group-item ${itemClass}">
-                        ${icon} ${ans.content}
-                    </div>
-                `;
-            });
-            html += '</div>';
-        } 
-        
-        // --- TRƯỜNG HỢP B: ĐÚNG / SAI CHÙM ---
-        else if (q.type === 'true_false_group' && q.children) {
-            html += '<div class="table-responsive"><table class="table table-bordered align-middle">';
-            html += '<thead class="table-light"><tr><th>Ý nhận định</th><th class="text-center" width="100">Đáp án</th></tr></thead><tbody>';
-            
-            q.children.forEach(child => {
-                // Tìm đáp án đúng của câu con này
-                let correctAns = child.answers.find(a => a.is_correct == 1);
-                let resultText = correctAns ? correctAns.content : 'N/A';
-                let badgeClass = resultText === 'Đúng' ? 'bg-success' : 'bg-danger';
-
-                html += `
-                    <tr>
-                        <td>${child.content}</td>
-                        <td class="text-center">
-                            <span class="badge ${badgeClass}">${resultText}</span>
-                        </td>
-                    </tr>
-                `;
-            });
-            html += '</tbody></table></div>';
-        }
-
-        // 5. Hiển thị Modal
-        modalBody.innerHTML = html;
-        var myModal = new bootstrap.Modal(document.getElementById('questionPreviewModal'));
-        myModal.show();
-    }
-</script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <script>
-        // --- 1. KHỞI TẠO DỮ LIỆU ---
-        // Lấy dữ liệu từ Controller truyền sang (Biến $selectedQuestionsInit)
-        // Nếu Controller chưa truyền thì fallback về mảng rỗng để tránh lỗi
-        let dbQuestions = @json($selectedQuestionsInit ?? []); 
-        
-        // Key lưu trữ riêng cho trang Edit (để không bị lẫn với trang Create)
-        let storageKey = 'exam_edit_cart_' + {{ $exam->id }};
-        
-        // Ưu tiên lấy từ LocalStorage (nếu đang sửa dở), nếu không thì lấy từ DB
-        let selectedQuestions = JSON.parse(localStorage.getItem(storageKey));
+        function examEditor() {
+            return {
+                // Chỉ lấy dữ liệu câu hỏi đã chọn trong đề
+                bankQuestions: @json($selectedQuestions).map(q => ({...q, isEditing: false})),
+                sortableInstance: null,
 
-        if (!selectedQuestions || selectedQuestions.length === 0) {
-            // Chuẩn hóa dữ liệu từ DB (đảm bảo type luôn có giá trị)
-            selectedQuestions = dbQuestions.map(item => ({
-                id: String(item.id),
-                type: (item.type || 'chung').toLowerCase()
-            }));
-            localStorage.setItem(storageKey, JSON.stringify(selectedQuestions));
-        }
+                init() {
+                    this.setupSortable();
+                },
 
-        document.addEventListener("DOMContentLoaded", function() {
-            updateUI();
-            
-            // Đánh dấu các checkbox
-            let savedIds = selectedQuestions.map(item => item.id);
-            document.querySelectorAll('.question-checkbox').forEach(cb => {
-                if (savedIds.includes(String(cb.value))) {
-                    cb.checked = true;
+                setupSortable() {
+                    this.$nextTick(() => {
+                        const container = this.$refs.sortableContainer;
+                        if (!container) return;
+                        if (this.sortableInstance) this.sortableInstance.destroy();
+
+                        this.sortableInstance = Sortable.create(container, {
+                            handle: '.drag-handle',
+                            animation: 200,
+                            ghostClass: 'sortable-ghost',
+                            onEnd: (evt) => {
+                                const oldIndex = evt.oldIndex;
+                                const newIndex = evt.newIndex;
+                                if (oldIndex === newIndex) return;
+
+                                const parent = evt.from;
+                                const item = evt.item;
+                                if (newIndex > oldIndex) { parent.insertBefore(item, parent.children[oldIndex]); } 
+                                else { parent.insertBefore(item, parent.children[oldIndex + 1]); }
+
+                                const items = [...this.bankQuestions];
+                                const movedItem = items.splice(oldIndex, 1)[0];
+                                items.splice(newIndex, 0, movedItem);
+                                this.bankQuestions = items;
+                            }
+                        });
+                    });
+                },
+
+                removeQuestion(id) {
+                    if(confirm('Bạn có chắc muốn xóa câu hỏi này khỏi đề thi không?')) {
+                        this.bankQuestions = this.bankQuestions.filter(q => q.id != String(id));
+                    }
+                },
+
+                countLevel(lv) {
+                    return this.bankQuestions.filter(q => q.level.toLowerCase() === lv.toLowerCase()).length;
+                },
+
+                getLevelName(level) {
+                    const map = {'easy': 'Nhận biết', 'medium': 'Thông hiểu', 'hard': 'Vận dụng', 'very_hard': 'Vận dụng cao'};
+                    return map[level.toLowerCase()] || level;
+                },
+
+                getLevelClass(level) {
+                    const map = {'easy': 'bg-success', 'medium': 'bg-primary', 'hard': 'bg-warning text-dark', 'very_hard': 'bg-danger'};
+                    return map[level.toLowerCase()] || 'bg-secondary';
+                },
+
+                limitText(text, limit) {
+                    if(!text) return '';
+                    let plainText = text.replace(/<[^>]*>/g, '');
+                    return plainText.length > limit ? plainText.substring(0, limit) + '...' : plainText;
+                },
+
+                toggleAccordion(id) {
+                    const el = document.getElementById('ans-' + id);
+                    const icon = document.getElementById('icon-' + id);
+                    if (el) {
+                        const isVisible = el.style.display === 'block';
+                        document.querySelectorAll('.answer-list').forEach(item => item.style.display = 'none');
+                        document.querySelectorAll('.chevron-icon').forEach(i => i.classList.remove('rotate-180'));
+                        el.style.display = isVisible ? 'none' : 'block';
+                        if(!isVisible && icon) icon.classList.add('rotate-180');
+                    }
                 }
-            });
-        });
-
-        // --- 2. HÀM TOGGLE (Lưu cả ID và Type) ---
-        function toggleQuestion(id, isChecked, type = 'chung') {
-            id = String(id);
-            type = type.toLowerCase();
-            
-            if (isChecked) {
-                if (!selectedQuestions.some(item => item.id === id)) {
-                    selectedQuestions.push({ id: id, type: type });
-                }
-            } else {
-                selectedQuestions = selectedQuestions.filter(item => item.id !== id);
             }
-            saveToStorage();
-        }
-
-        // --- 3. CẬP NHẬT GIAO DIỆN (Đếm chi tiết) ---
-        function updateUI() {
-            document.getElementById('totalCount').innerText = selectedQuestions.length;
-            
-            let chung = selectedQuestions.filter(i => i.type == 'chung' || !i.type).length;
-            let cs = selectedQuestions.filter(i => i.type == 'cs').length;
-            let ict = selectedQuestions.filter(i => i.type == 'ict').length;
-
-            document.getElementById('countChung').innerText = chung;
-            document.getElementById('countCS').innerText = cs;
-            document.getElementById('countICT').innerText = ict;
-        }
-
-        function saveToStorage() {
-            localStorage.setItem(storageKey, JSON.stringify(selectedQuestions));
-            updateUI();
-        }
-
-        // Check All
-        const checkAllBox = document.getElementById('checkAll');
-        if(checkAllBox) {
-            checkAllBox.addEventListener('change', function() {
-                let isChecked = this.checked;
-                document.querySelectorAll('.question-checkbox').forEach(cb => {
-                    cb.checked = isChecked;
-                    let type = cb.getAttribute('data-type') || 'chung';
-                    toggleQuestion(cb.value, isChecked, type);
-                });
-            });
-        }
-
-        // --- 4. SUBMIT FORM ---
-        function submitEditForm() {
-            if (selectedQuestions.length === 0) {
-                alert("Đề thi phải có ít nhất 1 câu hỏi!");
-                return;
-            }
-            // Chỉ gửi danh sách ID về server
-            let ids = selectedQuestions.map(item => item.id);
-            document.getElementById('finalQuestionIds').value = ids.join(',');
-            
-            // Xóa storage để lần sau vào lại sẽ load mới từ DB
-            localStorage.removeItem(storageKey);
-            
-            document.getElementById('editExamForm').submit();
         }
     </script>
     @endpush
-
-</x-layouts.teacher>
+</x-layouts.shared>

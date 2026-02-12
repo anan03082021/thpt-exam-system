@@ -2,6 +2,20 @@
     
     @push('styles')
     <style>
+        /* Class ép hiển thị 1 dòng */
+.desc-clamp {
+    display: -webkit-box;
+    -webkit-line-clamp: 1;       /* Chỉ hiện 1 dòng */
+    -webkit-box-orient: vertical;
+    overflow: hidden;            /* Cắt bỏ phần thừa */
+    text-overflow: ellipsis;     /* Thêm dấu ... */
+    
+    line-height: 1.5rem;         /* Chiều cao dòng */
+    height: 1.5rem;              /* Chiều cao cố định = 1 dòng */
+    
+    margin-bottom: 1rem;
+    color: #6c757d;
+}
         /* Banner Gradient Xanh Lá */
         .practice-banner {
             background: linear-gradient(135deg, #198754 0%, #20c997 100%);
@@ -103,6 +117,16 @@
                             <h5 class="card-title fw-bold text-dark mb-2 text-truncate" title="{{ $exam->title }}">
                                 {{ $exam->title }}
                             </h5>
+
+                            {{-- [ĐOẠN CẦN SỬA] Description --}}
+{{-- Sử dụng Bootstrap Tooltip để hiện mô tả đầy đủ khi hover --}}
+<p class="small desc-clamp mb-3" 
+   data-bs-toggle="tooltip" 
+   data-bs-placement="top"
+   data-bs-html="true" {{-- Cho phép nếu mô tả có xuống dòng --}}
+   title="{{ nl2br(e($exam->description ?? 'Không có mô tả chi tiết.')) }}">
+    {{ $exam->description ?? '' }}
+</p>
                             
                             {{-- Info --}}
                             <div class="text-secondary small mb-4">
@@ -144,5 +168,23 @@
             <p class="text-muted mb-0">Hệ thống đang cập nhật thêm đề thi. Vui lòng quay lại sau.</p>
         </div>
     @endif
+
+    @push('scripts')
+{{-- Đảm bảo bạn đã load Bootstrap JS Bundle (thường đã có sẵn trong layout chính) --}}
+{{-- <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script> --}}
+
+<script>
+    // Đoạn script tiêu chuẩn để khởi tạo tất cả Tooltip trên trang
+    document.addEventListener('DOMContentLoaded', function () {
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl, {
+                delay: { "show": 100, "hide": 100 }, // Hiện nhanh sau 0.1s
+                trigger: 'hover' // Chỉ hiện khi di chuột
+            });
+        });
+    });
+</script>
+@endpush
 
 </x-app-layout>

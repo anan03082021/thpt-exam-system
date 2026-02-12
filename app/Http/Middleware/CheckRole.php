@@ -9,14 +9,35 @@ use Illuminate\Support\Facades\Auth;
 
 class CheckRole
 {
-    public function handle(Request $request, Closure $next, $role): Response
+    /**
+     * Handle an incoming request.
+     *
+     * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
+     */
+    // SỬA ĐỔI: Dùng ...$roles để nhận danh sách các role (VD: 'teacher', 'admin')
+    public function handle(Request $request, Closure $next, ...$roles): Response
     {
-        // Kiểm tra nếu chưa đăng nhập hoặc role không đúng yêu cầu
-        if (!Auth::check() || Auth::user()->role !== $role) {
-            // Nếu là học sinh cố vào trang admin -> đẩy về dashboard
-            return redirect('/dashboard')->with('error', 'Bạn không có quyền truy cập!');
+        // 1. Kiểm tra đăng nhập
+        if (!Auth::check()) {
+            return redirect()->route('login');
         }
 
-        return $next($request);
+        $user = Auth::user();
+
+        // 2. QUYỀN LỰC TỐI CAO CHO ADMIN
+        // Nếu user là admin, cho qua mọi cửa kiểm soát mà không cần check tiếp
+        if ($user->role === 'admin') {
+            return $next($request);
+        }
+
+        // 3. Kiểm tra Role có nằm trong danh sách cho phép không
+        // Ví dụ: middleware('role:teacher') -> $roles là ['teacher']
+        // Ví dụ: middleware('role:teacher,student') -> $roles là ['teacher', 'student']
+        if (in_array($user->role, $roles)) {
+            return $next($request);
+        }
+
+        // 4. Nếu không đúng quyền -> Đá về Dashboard
+        return redirect()->route('dashboard')->with('error', 'Bạn không có quyền truy cập chức năng này!');
     }
 }

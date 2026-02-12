@@ -34,7 +34,7 @@
                                 @endforeach
                             </div>
 
-                        {{-- XỬ LÝ DẠNG 2: ĐÚNG/SAI CHÙM --}}
+                        {{-- XỬ LÝ DẠNG 2: ĐÚNG/SAI --}}
                         @elseif($question->type == 'true_false_group')
                             <div class="alert alert-info">
                                 <strong>Đọc đoạn văn sau và trả lời các ý bên dưới:</strong><br>

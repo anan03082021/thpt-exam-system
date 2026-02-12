@@ -2,7 +2,7 @@
     
     @push('styles')
     <style>
-        /* Banner Gradient Tím/Xanh - Tạo cảm giác Tổng kết/Thống kê */
+        /* Banner Gradient Tím/Xanh */
         .history-banner {
             background: linear-gradient(135deg, #6f42c1 0%, #8553e6 100%);
             color: white;
@@ -48,18 +48,18 @@
         }
 
         .nav-btn.active-official {
-            background: #0d6efd; /* Xanh dương cho Kỳ thi */
+            background: #0d6efd; /* Xanh dương */
             color: white;
             box-shadow: 0 4px 10px rgba(13, 110, 253, 0.3);
         }
 
         .nav-btn.active-practice {
-            background: #198754; /* Xanh lá cho Luyện tập */
+            background: #198754; /* Xanh lá */
             color: white;
             box-shadow: 0 4px 10px rgba(25, 135, 84, 0.3);
         }
 
-        /* Bảng đẹp hơn */
+        /* Bảng */
         .table-custom th {
             font-weight: 700;
             text-transform: uppercase;
@@ -75,10 +75,11 @@
     </style>
     @endpush
 
-    {{-- Load Chart.js --}}
+    {{-- 1. LOAD THƯ VIỆN CHART.JS VÀ PLUGIN --}}
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
 
-    {{-- 1. BANNER TIÊU ĐỀ --}}
+    {{-- 2. BANNER TIÊU ĐỀ --}}
     <div class="history-banner">
         <div class="row align-items-center position-relative z-1">
             <div class="col-lg-8">
@@ -89,57 +90,55 @@
                 <i class="bi bi-graph-up-arrow" style="font-size: 5rem; opacity: 0.2;"></i>
             </div>
         </div>
-        {{-- Họa tiết nền --}}
         <div class="position-absolute bg-white opacity-10 rounded-circle" style="width: 200px; height: 200px; top: -50px; right: -50px;"></div>
     </div>
 
-    {{-- Dùng AlpineJS để quản lý Tab --}}
+    {{-- 3. NỘI DUNG CHÍNH (ALPINEJS) --}}
     <div x-data="{ activeTab: 'official' }">
         
-        {{-- PHẦN 1: BIỂU ĐỒ TỔNG QUAN --}}
+        {{-- BIỂU ĐỒ --}}
         <div class="row g-4 mb-5">
             {{-- Biểu đồ tròn: Độ phủ --}}
             <div class="col-md-4">
                 <div class="stats-card p-4 d-flex flex-column align-items-center justify-content-center text-center">
                     <h5 class="fw-bold text-secondary mb-4"><i class="bi bi-pie-chart-fill me-2 text-warning"></i> Độ phủ kiến thức</h5>
-                    <div style="width: 180px; height: 180px; position: relative;">
+                    
+                    <div style="width: 100%; height: 250px; position: relative;">
                         <canvas id="progressChart"></canvas>
                     </div>
-                    <div class="mt-4 text-muted small bg-light px-3 py-2 rounded-pill">
-                        Đã làm <strong>{{ $examsTakenCount }}</strong> / {{ $totalExamsAvailable }} đề có sẵn
+
+                    <div class="mt-2 text-muted small bg-light px-3 py-2 rounded-pill">
+                        Tổng số đề có trong kho: <strong>{{ $totalExamsAvailable }}</strong>
                     </div>
                 </div>
             </div>
 
-            {{-- Biểu đồ cột: Điểm số --}}
-            {{-- Biểu đồ Radar: Mức độ thành thạo theo chủ đề --}}
+            {{-- Biểu đồ Radar: Mức độ thành thạo --}}
             <div class="col-md-8">
                 <div class="stats-card p-4 h-100">
                     <div class="d-flex justify-content-between align-items-center mb-4">
                         <h5 class="fw-bold text-secondary mb-0">
                             <i class="bi bi-radar me-2 text-primary"></i> Mức độ thành thạo theo chủ đề
                         </h5>
-                        <span class="badge bg-light text-muted border">Thang điểm 10</span>
+                        <span class="badge bg-light text-muted border">Thang điểm 100%</span>
                     </div>
                     
                     <div style="height: 300px; width: 100%; display: flex; justify-content: center;">
                         <canvas id="topicRadarChart"></canvas>
                     </div>
                     
-                    {{-- Chú thích nhỏ --}}
                     <div class="mt-3 text-center small text-muted">
-                        <span class="me-3"><i class="bi bi-circle-fill text-primary" style="font-size: 8px;"></i> Năng lực hiện tại</span>
-                        <span><i class="bi bi-circle-fill text-secondary opacity-25" style="font-size: 8px;"></i> Mức tối đa</span>
+                        <span class="me-3"><i class="bi bi-circle-fill" style="color: #6366f1;"></i> Năng lực hiện tại</span>
+                        <span><i class="bi bi-circle-fill text-secondary opacity-25"></i> Mức tối đa</span>
                     </div>
                 </div>
             </div>
         </div>
 
-        {{-- PHẦN 2: DANH SÁCH LỊCH SỬ (TABS) --}}
+        {{-- DANH SÁCH LỊCH SỬ --}}
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h4 class="fw-bold text-dark mb-0">Chi tiết lịch sử</h4>
             
-            {{-- Bộ nút chuyển Tab --}}
             <div class="nav-pills-custom shadow-sm">
                 <button @click="activeTab = 'official'" 
                     :class="activeTab === 'official' ? 'active-official' : ''"
@@ -192,9 +191,9 @@
                                         </td>
                                         <td class="text-end pe-4">
                                             <a href="{{ route('student.exam.result.official', $attempt->id) }}" 
-   class="btn btn-sm btn-outline-primary rounded-pill fw-bold px-3 transition-hover">
-    Xem kết quả <i class="bi bi-arrow-right-short"></i>
-</a>
+                                               class="btn btn-sm btn-outline-primary rounded-pill fw-bold px-3 transition-hover">
+                                                Xem kết quả <i class="bi bi-arrow-right-short"></i>
+                                            </a>
                                         </td>
                                     </tr>
                                 @endforeach
@@ -243,9 +242,6 @@
                                             <div class="fw-bold {{ $item['best_score'] >= 8 ? 'text-success' : ($item['best_score'] >= 5 ? 'text-primary' : 'text-danger') }}" style="font-size: 1.1rem;">
                                                 {{ number_format($item['best_score'], 2) }}
                                             </div>
-                                            <div class="text-muted" style="font-size: 0.75rem;">
-                                                TB: {{ number_format($item['average_score'], 2) }}
-                                            </div>
                                         </td>
 
                                         <td class="text-end pe-4">
@@ -271,90 +267,129 @@
         </div>
     </div>
 
-    {{-- Script vẽ biểu đồ (Logic giữ nguyên, chỉ chỉnh màu cho khớp theme Bootstrap) --}}
-<script>
+    {{-- 4. SCRIPT VẼ BIỂU ĐỒ (ĐÃ SỬA LỖI CÚ PHÁP) --}}
+    {{-- 4. SCRIPT VẼ BIỂU ĐỒ (ĐÃ SỬA LỖI CÚ PHÁP) --}}
+{{-- 4. SCRIPT VẼ BIỂU ĐỒ (PHIÊN BẢN AN TOÀN TUYỆT ĐỐI) --}}
+    <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // 1. Biểu đồ Tròn (Độ phủ) - GIỮ NGUYÊN
-            const ctxPie = document.getElementById('progressChart').getContext('2d');
-            new Chart(ctxPie, {
-                type: 'doughnut',
-                data: {
-                    labels: ['Đã làm', 'Chưa làm'],
-                    datasets: [{
-                        data: [{{ $examsTakenCount }}, {{ $totalExamsAvailable - $examsTakenCount }}],
-                        backgroundColor: ['#ffc107', '#e9ecef'], 
-                        borderWidth: 0,
-                        hoverOffset: 10
-                    }]
+            // A. KHỞI TẠO DỮ LIỆU TỪ PHP SANG JS MỘT CÁCH AN TOÀN
+            // Chúng ta dùng json_encode để chuyển đổi dữ liệu PHP sang JSON chuẩn
+            const chartData = {
+                pie: {
+                    done: {{ $examsTakenCount }},
+                    total: {{ $totalExamsAvailable }}
                 },
-                options: { 
-                    cutout: '75%', 
-                    borderRadius: 20, 
-                    plugins: { legend: { display: false } } 
+                radar: {
+                    labels: {!! json_encode($chartLabels) !!},
+                    percents: {!! json_encode($chartPercent) !!},
+                    raws: {!! json_encode($chartRaw) !!}
                 }
-            });
+            };
 
-            // 2. Biểu đồ Radar (Mức độ thành thạo) - MỚI
-            const ctxRadar = document.getElementById('topicRadarChart').getContext('2d');
-            
-            // Dữ liệu mẫu (Nếu Controller chưa trả về, bạn cần cập nhật Controller để tính toán)
-            // Cấu trúc mong đợi từ Controller: $topicMastery = [['name' => 'Chủ đề A', 'score' => 8], ...]
-            // Ở đây tôi dùng biến $topicMastery được truyền từ Controller
-            const topicData = @json($topicMastery ?? []); 
-            
-            // Nếu chưa có dữ liệu thật, dùng dữ liệu giả lập để test giao diện
-            const labels = topicData.length > 0 ? topicData.map(t => t.name) : ['Chủ đề A', 'Chủ đề B', 'Chủ đề C', 'Chủ đề D', 'Chủ đề E', 'Chủ đề F', 'Chủ đề G'];
-            const scores = topicData.length > 0 ? topicData.map(t => t.score) : [0, 0, 0, 0, 0, 0, 0]; // Mặc định 0 nếu chưa làm
+            // Đăng ký Plugin
+            if (typeof ChartDataLabels !== 'undefined') {
+                Chart.register(ChartDataLabels);
+            }
 
-            new Chart(ctxRadar, {
-                type: 'radar',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Điểm trung bình',
-                        data: scores,
-                        fill: true,
-                        backgroundColor: 'rgba(13, 110, 253, 0.2)', // Xanh dương nhạt
-                        borderColor: '#0d6efd', // Xanh dương đậm
-                        pointBackgroundColor: '#0d6efd',
-                        pointBorderColor: '#fff',
-                        pointHoverBackgroundColor: '#fff',
-                        pointHoverBorderColor: '#0d6efd',
-                        borderWidth: 2,
-                        pointRadius: 4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    return context.formattedValue + ' điểm';
+            // ==========================================
+            // B. VẼ BIỂU ĐỒ TRÒN
+            // ==========================================
+            const ctxPie = document.getElementById('progressChart');
+            if (ctxPie) {
+                const valDone = chartData.pie.done;
+                const valTotal = chartData.pie.total;
+                let valRem = Math.max(0, valTotal - valDone);
+
+                new Chart(ctxPie.getContext('2d'), {
+                    type: 'pie',
+                    data: {
+                        labels: ['Đã hoàn thành', 'Chưa hoàn thành'],
+                        datasets: [{
+                            data: [valDone, valRem],
+                            backgroundColor: ['#6366f1', '#e2e8f0'], // Tím Indigo & Xám
+                            borderColor: '#ffffff',
+                            borderWidth: 3,
+                            hoverOffset: 6
+                        }]
+                    },
+                    options: { 
+                        responsive: true, maintainAspectRatio: false, layout: { padding: 25 },
+                        plugins: { 
+                            legend: { display: false }, tooltip: { enabled: false },
+                            datalabels: {
+                                color: ctx => ctx.dataIndex === 0 ? '#ffffff' : '#475569',
+                                anchor: 'end', align: 'start', offset: 0,
+                                font: { weight: 'bold', size: 12, family: "'Plus Jakarta Sans', sans-serif" },
+                                formatter: (val, ctx) => {
+                                    if(val <= 0) return '';
+                                    let sum = ctx.chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
+                                    let pct = (sum > 0) ? (val * 100 / sum).toFixed(0) + "%" : "0%";
+                                    return val + ' đề\n(' + pct + ')';
                                 }
                             }
-                        }
+                        } 
+                    }
+                });
+            }
+
+            // ==========================================
+            // C. VẼ BIỂU ĐỒ RADAR
+            // ==========================================
+            const ctxRadar = document.getElementById('topicRadarChart');
+            if (ctxRadar) {
+                // Lấy dữ liệu từ biến chartData đã khai báo ở trên
+                const radarLabels = chartData.radar.labels.length ? chartData.radar.labels : ['Chưa có dữ liệu'];
+                const radarPercents = chartData.radar.labels.length ? chartData.radar.percents : [0];
+                const radarRaws = chartData.radar.labels.length ? chartData.radar.raws : ['0/0'];
+                
+                const isAllZero = radarPercents.every(v => v === 0);
+                const suggestedMax = isAllZero ? 10 : 100;
+
+                new Chart(ctxRadar.getContext('2d'), {
+                    type: 'radar',
+                    data: {
+                        labels: radarLabels,
+                        datasets: [{
+                            label: 'Tỷ lệ làm đúng',
+                            data: radarPercents,
+                            fill: true,
+                            backgroundColor: 'rgba(99, 102, 241, 0.2)',
+                            borderColor: '#6366f1',
+                            pointBackgroundColor: '#6366f1',
+                            pointBorderColor: '#fff',
+                            pointHoverBackgroundColor: '#fff',
+                            pointHoverBorderColor: '#6366f1',
+                            borderWidth: 2, pointRadius: 3, pointHoverRadius: 5
+                        }]
                     },
-                    scales: {
-                        r: {
-                            angleLines: { color: '#e9ecef' }, // Màu tia
-                            grid: { color: '#e9ecef' },       // Màu lưới vòng tròn
-                            pointLabels: {
-                                font: { size: 12, weight: 'bold' },
-                                color: '#495057' // Màu chữ tên chủ đề
-                            },
-                            suggestedMin: 0,
-                            suggestedMax: 10, // Thang điểm 10
-                            ticks: {
-                                stepSize: 2,
-                                display: false // Ẩn số trên trục để đỡ rối
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false }, datalabels: { display: false },
+                            tooltip: {
+                                backgroundColor: 'rgba(30, 27, 75, 0.9)',
+                                padding: 10, bodyFont: { size: 13 }, displayColors: false,
+                                callbacks: {
+                                    title: ctx => ctx[0].label,
+                                    label: ctx => ` ✅ Đúng: ${radarRaws[ctx.dataIndex] || '0/0'} câu (${ctx.raw}%)`
+                                }
+                            }
+                        },
+                        scales: {
+                            r: {
+                                angleLines: { color: '#f1f5f9' }, grid: { color: '#f1f5f9' },
+                                pointLabels: { 
+                                    font: { size: 10, weight: '600', family: "'Plus Jakarta Sans', sans-serif" }, 
+                                    color: '#64748b',
+                                    callback: label => (label.length > 15 ? label.match(/.{1,15}(\s|$)/g) : label)
+                                },
+                                suggestedMin: 0, suggestedMax: suggestedMax,
+                                ticks: { stepSize: 20, display: false, backdropColor: 'transparent' }
                             }
                         }
                     }
-                }
-            });
+                });
+            }
         });
     </script>
 </x-app-layout>

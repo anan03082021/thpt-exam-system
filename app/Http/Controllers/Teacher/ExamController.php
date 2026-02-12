@@ -18,57 +18,27 @@ class ExamController extends Controller
 {
     public function index()
     {
-        // Hiển thị danh sách đề thi (giữ nguyên logic của bạn)
         $exams = Exam::latest()->paginate(10);
         return view('teacher.exams.index', compact('exams'));
     }
 
     public function create(Request $request)
     {
-        // 1. Khởi tạo Query (Chỉ lấy câu hỏi cha, không lấy câu hỏi con)
         $query = Question::query()->whereNull('parent_id');
 
-        // 2. Áp dụng các bộ lọc (Filters)
-        if ($request->filled('grade')) {
-            $query->where('grade', $request->grade);
-        }
-        if ($request->filled('topic_id')) {
-            $query->where('topic_id', $request->topic_id);
-        }
-        if ($request->filled('orientation')) {
-            $query->where('orientation', $request->orientation);
-        }
-        if ($request->filled('type')) {
-            $query->where('type', $request->type);
-        }
-        if ($request->filled('competency_id')) {
-            $query->where('competency_id', $request->competency_id);
-        }
-        if ($request->filled('cognitive_level_id')) {
-            $query->where('cognitive_level_id', $request->cognitive_level_id);
-        }
+        if ($request->filled('grade')) $query->where('grade', $request->grade);
+        if ($request->filled('topic_id')) $query->where('topic_id', $request->topic_id);
+        if ($request->filled('orientation')) $query->where('orientation', $request->orientation);
+        if ($request->filled('type')) $query->where('type', $request->type);
+        if ($request->filled('competency_id')) $query->where('competency_id', $request->competency_id);
+        if ($request->filled('cognitive_level_id')) $query->where('cognitive_level_id', $request->cognitive_level_id);
+        if ($request->filled('source')) $query->where('source', $request->source);
 
-        // [MỚI] Bộ lọc theo Nguồn dữ liệu (thpt_2025 hoặc user)
-        if ($request->filled('source')) {
-            $query->where('source', $request->source);
-        }
+        $questions = $query->with(['topic', 'cognitiveLevel', 'competency', 'answers', 'children.answers'])
+            ->latest()->paginate(20)->withQueryString();
 
-        // 3. Lấy dữ liệu và phân trang
-        // Eager load các quan hệ cần thiết để hiển thị (bao gồm cả đáp án để xem trước)
-        $questions = $query->with([
-            'topic', 
-            'cognitiveLevel', 
-            'competency', 
-            'answers',           // Lấy đáp án cho câu trắc nghiệm
-            'children.answers'   // Lấy câu con và đáp án cho câu chùm
-        ])
-        ->latest()
-        ->paginate(20)
-        ->withQueryString(); // Giữ lại các tham số lọc trên URL khi chuyển trang
-
-        // 4. Lấy dữ liệu cho các Dropdown bộ lọc
         $topics = Topic::all();
-        $competencies = Competency::all();
+        $competencies = Competency::orderBy('code', 'asc')->get();
         $levels = CognitiveLevel::all();
 
         return view('teacher.exams.create', compact('questions', 'topics', 'competencies', 'levels'));
@@ -76,31 +46,21 @@ class ExamController extends Controller
 
     public function store(Request $request)
     {
-        // 1. Validate dữ liệu đầu vào
         $request->validate([
             'title' => 'required|string|max:255',
+            'description' => 'nullable|string|max:200',
             'duration' => 'required|integer|min:5',
             'question_ids' => 'nullable|string', 
-            
-            // Validate mảng câu hỏi mới (nếu có)
             'new_questions' => 'nullable|array',
-            'new_questions.*.content' => 'required_with:new_questions|string',
-            'new_questions.*.grade' => 'required_with:new_questions|integer',
-            'new_questions.*.topic_id' => 'required_with:new_questions|exists:topics,id',
-            'new_questions.*.level' => 'required_with:new_questions|string',
-            'new_questions.*.orientation' => 'required_with:new_questions|in:chung,cs,ict', // Bắt buộc chọn định hướng
-            
-            'new_questions.*.options' => 'required_with:new_questions|array|min:2',
-            'new_questions.*.correct_index' => 'required_with:new_questions|integer',
         ]);
 
         try {
             DB::beginTransaction();
 
-            // 2. Tạo Đề thi
             $isPublic = $request->has('is_public') ? true : false;
             $exam = Exam::create([
                 'title' => $request->title,
+                'description' => $request->description,
                 'duration' => $request->duration,
                 'creator_id' => Auth::id(),
                 'is_public' => $isPublic,
@@ -109,151 +69,275 @@ class ExamController extends Controller
 
             $finalQuestionIds = [];
 
-            // 3. Xử lý câu hỏi từ NGÂN HÀNG (đã chọn qua checkbox)
             if (!empty($request->question_ids)) {
                 $bankIds = explode(',', $request->question_ids);
                 $finalQuestionIds = array_merge($finalQuestionIds, $bankIds);
             }
 
-            // 4. Xử lý câu hỏi TẠO MỚI (Soạn thảo trực tiếp)
             if (!empty($request->new_questions)) {
                 foreach ($request->new_questions as $qData) {
-                    
-                    // 4a. Tạo câu hỏi mới
                     $newQuestion = Question::create([
                         'content' => $qData['content'],
-                        'type' => 'single_choice', // Mặc định trắc nghiệm (hoặc sửa logic nếu hỗ trợ nhiều loại)
+                        'type' => 'single_choice',
                         'grade' => $qData['grade'],
                         'topic_id' => $qData['topic_id'],
                         'orientation' => $qData['orientation'],
                         'cognitive_level_id' => null, 
                         'level' => $qData['level'] ?? 'medium',
                         'user_id' => Auth::id(),
-                        'source' => 'user', // Đánh dấu là câu hỏi do user tạo
+                        'source' => 'user',
                     ]);
 
-                    // 4b. Tạo đáp án cho câu hỏi mới
                     foreach ($qData['options'] as $idx => $optContent) {
-                        Answer::create([
-                            'question_id' => $newQuestion->id,
-                            'content' => $optContent,
-                            'is_correct' => ($idx == $qData['correct_index']),
-                        ]);
+                        if(!empty($optContent)) {
+                            Answer::create([
+                                'question_id' => $newQuestion->id,
+                                'content' => $optContent,
+                                'is_correct' => ($idx == $qData['correct_index']),
+                            ]);
+                        }
                     }
-
                     $finalQuestionIds[] = $newQuestion->id;
                 }
             }
 
-            // 5. Gắn câu hỏi vào đề thi (Sync Pivot Table)
             $pivotData = [];
             foreach ($finalQuestionIds as $index => $id) {
                 $pivotData[$id] = ['order' => $index + 1];
             }
             $exam->questions()->sync($pivotData);
-            
-            // 6. Cập nhật tổng số câu hỏi
             $exam->update(['total_questions' => count($finalQuestionIds)]);
 
-            // 7. Thống kê phân loại (Optional: để hiển thị thông báo chi tiết)
-            $stats = Question::whereIn('id', $finalQuestionIds)
-                ->select('orientation', DB::raw('count(*) as total'))
-                ->groupBy('orientation')
-                ->pluck('total', 'orientation')
-                ->toArray();
-
-            $stats = array_change_key_case($stats, CASE_LOWER);
-            $countChung = ($stats['chung'] ?? 0) + ($stats[''] ?? 0); 
-            $countCS = $stats['cs'] ?? 0;
-            $countICT = $stats['ict'] ?? 0;
-
             DB::commit();
-
-            $msg = "Tạo đề thành công! (Tổng: " . count($finalQuestionIds) . " câu). <br>Phân loại: <b>{$countChung} Chung</b> - <b>{$countCS} CS</b> - <b>{$countICT} ICT</b>";
-
-            return redirect()->route('teacher.exams.index')->with('success', $msg);
+            return redirect()->route('teacher.exams.index')->with('success', 'Tạo đề thành công!');
 
         } catch (\Exception $e) {
             DB::rollBack();
-            return back()->with('error', 'Lỗi: ' . $e->getMessage())->withInput();
+            \Log::error("Exam Store Error: " . $e->getMessage());
+            return back()->with('error', 'Lỗi hệ thống: ' . $e->getMessage())->withInput();
         }
     }
 
     public function results($id)
     {
         $exam = Exam::findOrFail($id);
-        $attempts = ExamAttempt::with('user')
-            ->where('exam_id', $id)
-            ->orderBy('total_score', 'desc')
-            ->get();
-
+        $attempts = ExamAttempt::with('user')->where('exam_id', $id)->orderBy('total_score', 'desc')->get();
         return view('teacher.exams.results', compact('exam', 'attempts'));
     }
 
-    public function edit(Request $request, $id)
-    {
-        $exam = Exam::with('questions')->findOrFail($id);
-        $currentQuestionIds = $exam->questions->pluck('id')->toArray();
+public function edit($id)
+{
+    // 1. Load dữ liệu đề thi kèm các mối quan hệ (Giữ nguyên logic sắp xếp order)
+    $exam = Exam::with([
+        'questions' => function($query) {
+            $query->withPivot('order')->orderBy('exam_questions.order', 'asc');
+        },
+        'questions.answers',
+        'questions.children.answers',
+        'questions.cognitiveLevel',          
+        'questions.children.cognitiveLevel',
+        'questions.topic' // Load thêm topic để lấy topic_name
+    ])->findOrFail($id);
 
-        $query = Question::query()->whereNull('parent_id');
+    // Map mức độ từ Database sang mã giao diện (Helper mapping)
+    $dbToViewMap = [
+        'nhận biết' => 'easy',
+        'thông hiểu' => 'medium',
+        'vận dụng' => 'hard',
+        'vận dụng cao' => 'very_hard',
+        'easy' => 'easy', 'medium' => 'medium', 'hard' => 'hard', 'very_hard' => 'very_hard'
+    ];
 
-        if ($request->filled('grade')) $query->where('grade', $request->grade);
-        if ($request->filled('topic_id')) $query->where('topic_id', $request->topic_id);
-        if ($request->filled('type')) $query->where('type', $request->type);
-        if ($request->filled('competency_id')) $query->where('competency_id', $request->competency_id);
-        if ($request->filled('cognitive_level_id')) $query->where('cognitive_level_id', $request->cognitive_level_id);
-        
-        // Thêm bộ lọc source cho trang edit nếu cần
-        if ($request->filled('source')) {
-            $query->where('source', $request->source);
+    $transformLevel = function($q) use ($dbToViewMap) {
+        $lvName = strtolower($q->cognitiveLevel->name ?? 'easy'); 
+        return $dbToViewMap[$lvName] ?? 'easy';
+    };
+
+    // 2. Map dữ liệu câu hỏi hiện có trong đề
+    $selectedQuestions = $exam->questions->map(function ($q) use ($transformLevel) {
+        $answers = [];
+        $parentLevel = $transformLevel($q);
+
+        if ($q->type == 'single_choice') {
+            $answers = $q->answers->map(function($a) {
+                return [
+                    'id' => $a->id,
+                    'content' => $a->content,
+                    'is_correct' => (bool)$a->is_correct
+                ];
+            });
+        } elseif ($q->type == 'true_false_group') {
+            $answers = $q->children->map(function($c) use ($transformLevel) {
+                return [
+                    'id' => $c->id,
+                    'content' => $c->content,
+                    'level' => $transformLevel($c), 
+                    'is_correct' => $c->answers->where('is_correct', true)->first()->content ?? ''
+                ];
+            });
         }
 
-        $questions = $query->with([
-            'topic', 
-            'cognitiveLevel', 
-            'competency', 
-            'answers', 
-            'children.answers'
-        ])
-        ->latest()
-        ->paginate(20)
-        ->withQueryString();
+        return [
+            'id' => (string)$q->id,
+            'type' => strtolower($q->orientation ?? 'chung'),
+            'content' => $q->content,
+            'level' => $parentLevel,
+            'q_type' => $q->type,
+            'topic_id' => $q->topic_id,
+            'topic_name' => $q->topic->name ?? 'Chưa phân loại',
+            'answers' => $answers
+        ];
+    });
 
-        $topics = Topic::all();
-        $competencies = Competency::all();
-        $levels = CognitiveLevel::all();
+    // 3. Lấy dữ liệu danh mục cho 6 bộ lọc
+    $topics = Topic::all();
+    $competencies = Competency::all(); // Năng lực
+    $levels = CognitiveLevel::all();   // Mức độ (Dạng câu hỏi)
+    // Lớp, Nguồn, Định hướng thường là giá trị cố định, xử lý ở View hoặc mảng đơn giản
 
-        return view('teacher.exams.edit', compact('exam', 'questions', 'topics', 'competencies', 'levels', 'currentQuestionIds'));
+    // 4. Truy vấn Ngân hàng câu hỏi với đầy đủ 6 yếu tố lọc
+    $query = Question::whereNull('parent_id')
+        ->with(['answers', 'topic', 'children.cognitiveLevel', 'cognitiveLevel', 'competency']);
+
+    // Áp dụng lọc theo Request
+    if (request()->filled('grade')) {
+        $query->where('grade', request('grade'));
     }
+    if (request()->filled('topic_id')) {
+        $query->where('topic_id', request('topic_id'));
+    }
+    if (request()->filled('competency_id')) {
+        $query->where('competency_id', request('competency_id'));
+    }
+    if (request()->filled('level')) { // Lọc theo ID mức độ (cognitive_level_id)
+        $query->where('cognitive_level_id', request('level'));
+    }
+    if (request()->filled('orientation')) {
+        $query->where('orientation', request('orientation'));
+    }
+    if (request()->filled('source')) {
+        $query->where('source', request('source'));
+    }
+
+    // Lấy tất cả hoặc phân trang (tăng lên 20 để dễ quan sát)
+    $questions = $query->latest()->paginate(20)->withQueryString();
+
+    return view('teacher.exams.edit', compact(
+        'exam', 
+        'questions', 
+        'selectedQuestions', 
+        'topics', 
+        'competencies', 
+        'levels'
+    ));
+}
 
     public function update(Request $request, $id)
     {
         $request->validate([
             'title' => 'required',
-            'duration' => 'required|integer',
             'question_ids' => 'required',
+            'edited_contents' => 'nullable|array',
+            'edited_answers' => 'nullable|array',
         ]);
 
-        $exam = Exam::findOrFail($id);
-        
-        $isPublic = $request->has('is_public') ? true : false;
-        
-        $exam->update([
-            'title' => $request->title,
-            'duration' => $request->duration,
-            'is_public' => $isPublic,
-        ]);
+        try {
+            DB::beginTransaction();
+            $exam = Exam::findOrFail($id);
+            
+            $exam->update([
+                'title' => $request->title,
+                'description' => $request->description,
+                'duration' => $request->duration,
+                'is_public' => $request->has('is_public'),
+            ]);
 
-        $questionIds = explode(',', $request->question_ids);
-        $pivotData = [];
-        foreach ($questionIds as $index => $qId) {
-            $pivotData[$qId] = ['order' => $index + 1];
+            // 1. Chuẩn bị Map Level (View -> ID Database)
+            $allLevels = \App\Models\CognitiveLevel::all();
+            
+            $getLevelId = function($text) use ($allLevels) {
+                $map = [
+                    'easy' => ['easy', 'nhận biết', 'nb'],
+                    'medium' => ['medium', 'thông hiểu', 'th'],
+                    'hard' => ['hard', 'vận dụng', 'vd'],
+                    'very_hard' => ['very_hard', 'vận dụng cao', 'vdc'],
+                ];
+                
+                foreach ($allLevels as $lv) {
+                    $dbName = strtolower($lv->name);
+                    if (in_array($dbName, $map[$text] ?? [])) return $lv->id;
+                    if ($dbName == $text) return $lv->id;
+                }
+                return null;
+            };
+
+            // 2. Cập nhật câu hỏi (Content)
+            if ($request->filled('edited_contents')) {
+                foreach ($request->edited_contents as $qId => $content) {
+                    if (!empty($content)) {
+                        Question::where('id', $qId)->update(['content' => $content]);
+                    }
+                }
+            }
+
+            // 3. Cập nhật Đáp án & Level
+            if ($request->filled('edited_answers')) {
+                foreach ($request->edited_answers as $qId => $answersJson) {
+                    $answersData = json_decode($answersJson, true);
+                    if (!$answersData) continue;
+
+                    $mainQuestion = Question::find($qId);
+                    if (!$mainQuestion) continue;
+
+                    if ($mainQuestion->type === 'true_false_group') {
+                        $children = Question::where('parent_id', $qId)->get();
+                        foreach ($answersData as $index => $data) {
+                            if (isset($children[$index])) {
+                                // Tìm ID của level mới
+                                $newLevelId = isset($data['level']) ? $getLevelId($data['level']) : null;
+                                
+                                $updateData = ['content' => $data['content']];
+                                if ($newLevelId) {
+                                    $updateData['cognitive_level_id'] = $newLevelId;
+                                }
+
+                                $children[$index]->update($updateData);
+                                
+                                $isCorrect = ($data['is_correct'] === 'Đúng' || $data['is_correct'] === true || $data['is_correct'] == 1);
+                                Answer::where('question_id', $children[$index]->id)->update(['is_correct' => $isCorrect]);
+                            }
+                        }
+                    } elseif ($mainQuestion->type === 'single_choice') {
+                        $dbAnswers = Answer::where('question_id', $qId)->get();
+                        foreach ($answersData as $index => $data) {
+                            if (isset($dbAnswers[$index])) {
+                                $dbAnswers[$index]->update([
+                                    'content' => $data['content'],
+                                    'is_correct' => filter_var($data['is_correct'], FILTER_VALIDATE_BOOLEAN)
+                                ]);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 4. Sync Exam Questions
+            $questionIds = explode(',', $request->question_ids);
+            $pivotData = [];
+            foreach ($questionIds as $index => $qId) {
+                $pivotData[$qId] = ['order' => $index + 1];
+            }
+            $exam->questions()->sync($pivotData);
+            $exam->update(['total_questions' => count($questionIds)]);
+
+            DB::commit();
+            return redirect()->route('teacher.exams.index')->with('success', 'Đã lưu thành công!');
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Log::error("Exam Update Error: " . $e->getMessage());
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
-
-        $exam->questions()->sync($pivotData);
-        $exam->update(['total_questions' => count($questionIds)]);
-
-        return redirect()->route('teacher.exams.index')->with('success', 'Cập nhật đề thi thành công!');
     }
 
     public function destroy($id)

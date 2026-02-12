@@ -1,4 +1,4 @@
-<x-layouts.teacher title="Tổ chức kỳ thi mới">
+<x-layouts.shared title="Tổ chức kỳ thi mới">
 
     @push('styles')
     <style>
@@ -151,4 +151,4 @@
         </div>
     </form>
 
-</x-layouts.teacher>
+</x-layouts.shared>

@@ -8,7 +8,7 @@
 
         /* --- HERO CARD --- */
         .hero-card {
-            background: linear-gradient(135deg, #0ea5e9 0%, #3b82f6 100%); /* Màu xanh dương sáng hơn cho Luyện tập */
+            background: linear-gradient(135deg, #0ea5e9 0%, #3b82f6 100%);
             border-radius: 24px; color: white; padding: 2.5rem;
             position: relative; overflow: hidden;
             box-shadow: 0 20px 40px -10px rgba(14, 165, 233, 0.4);
@@ -67,14 +67,15 @@
     @endpush
 
     @php
-        // Eager load dữ liệu cần thiết để tránh N+1 Query
+        // 1. Eager load dữ liệu
         $rawAnswers = $attemptDetail->attemptAnswers->load(['question.parent', 'question.answers', 'question.topic', 'question.coreContent', 'question.learningObjective']);
 
+        // 2. Nhóm câu hỏi theo Parent (Câu chùm) hoặc Question ID (Câu lẻ)
         $groupedQuestions = $rawAnswers->groupBy(function($ans) {
             return $ans->question->parent_id ?? $ans->question_id;
         });
 
-        // Tự động phát hiện môn chọn (CS/ICT) để lọc
+        // 3. Tự động phát hiện môn chọn (CS/ICT) để lọc
         $userElective = null;
         foreach($groupedQuestions as $group) {
             $qOri = strtolower(trim($group->first()->question->orientation ?? ''));
@@ -84,10 +85,37 @@
             }
         }
 
-        // SẮP XẾP: Câu SAI lên đầu
+        // 4. SẮP XẾP: Câu SAI lên đầu để review
         $sortedQuestions = $groupedQuestions->sortBy(function($group) {
             return $group->contains('is_correct', false) ? 0 : 1;
         });
+
+        // --- [MỚI] 5. XỬ LÝ THỐNG KÊ MÔ TẢ THEO CHỦ ĐỀ ---
+        $statsByTopic = $rawAnswers->groupBy(function($ans) {
+            return $ans->question->topic->name ?? 'Kiến thức chung';
+        })->map(function($group) {
+            $total = $group->count();
+            $correct = $group->where('is_correct', true)->count();
+            $percent = $total > 0 ? round(($correct / $total) * 100) : 0;
+            
+            // Logic đánh giá
+            if ($percent >= 80) {
+                $status = 'Tốt'; $color = 'success'; $suggestion = 'Duy trì phong độ';
+            } elseif ($percent >= 50) {
+                $status = 'Khá'; $color = 'warning'; $suggestion = 'Cần luyện tập thêm';
+            } else {
+                $status = 'Yếu'; $color = 'danger'; $suggestion = 'Cần ôn tập gấp';
+            }
+
+            return (object) [
+                'total' => $total,
+                'correct' => $correct,
+                'percent' => $percent,
+                'status' => $status,
+                'color' => $color,
+                'suggestion' => $suggestion
+            ];
+        })->sortBy('percent'); // Sắp xếp chủ đề yếu nhất lên trước
     @endphp
 
     <div class="container py-4">
@@ -101,14 +129,13 @@
                 <a href="{{ route('student.history') }}" class="btn btn-white bg-white border fw-bold shadow-sm rounded-pill px-4">
                     <i class="bi bi-clock-history me-2"></i> Lịch sử
                 </a>
-                {{-- Nút làm lại bài --}}
                 <a href="{{ route('exam.practice', $exam->id) }}" class="btn btn-primary fw-bold shadow-sm rounded-pill px-4">
                     <i class="bi bi-arrow-repeat me-2"></i> Làm lại
                 </a>
             </div>
         </div>
 
-        {{-- TOP SECTION: SCORE & AREA CHART --}}
+        {{-- SECTION 1: TOP SCORE & AREA CHART --}}
         <div class="row g-4 mb-5 justify-content-center">
             
             {{-- Cột Điểm Số (Hero) --}}
@@ -125,7 +152,6 @@
                         <div class="progress-bar bg-white rounded-pill" role="progressbar" style="width: {{ $score * 10 }}%"></div>
                     </div>
 
-                    {{-- Nhận xét ngắn --}}
                     <div class="d-flex align-items-center gap-2 text-white">
                         @if($score >= 8)
                             <i class="bi bi-trophy-fill fs-5"></i> <span class="fw-bold">Làm rất tốt! Hãy duy trì phong độ.</span>
@@ -144,8 +170,6 @@
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <h6 class="fw-bold text-dark m-0"><i class="bi bi-graph-up-arrow text-primary me-2"></i>Tiến bộ qua các lần thi</h6>
                     </div>
-                    
-                    {{-- Khung chứa biểu đồ --}}
                     <div style="width: 420px; height: 240px;"> 
                         @if(isset($chartData) && count($chartData) > 0)
                             <canvas id="progressChart"></canvas>
@@ -159,7 +183,68 @@
             </div>
         </div>
 
-        {{-- MIDDLE SECTION: CHI TIẾT BÀI LÀM --}}
+        {{-- [MỚI] SECTION 2: BẢNG THỐNG KÊ & GỢI Ý ÔN TẬP --}}
+        <div class="card border-0 shadow-sm rounded-4 overflow-hidden mb-5">
+            <div class="card-header bg-white border-bottom p-4">
+                <h5 class="fw-bold text-dark m-0">
+                    <i class="bi bi-bar-chart-steps text-primary me-2"></i>Phân tích & Gợi ý ôn tập
+                </h5>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-light text-secondary small text-uppercase">
+                        <tr>
+                            <th class="ps-4 py-3">Chủ đề kiến thức</th>
+                            <th class="text-center">Kết quả</th>
+                            <th class="text-center" style="width: 25%;">Mức độ thành thạo</th>
+                            <th class="text-center">Đánh giá</th>
+                            <th class="text-end pe-4">Gợi ý</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($statsByTopic as $topicName => $stat)
+                            <tr>
+                                <td class="ps-4 fw-bold text-dark">{{ $topicName }}</td>
+                                <td class="text-center text-nowrap">
+                                    <span class="fw-bold text-{{ $stat->color }}">{{ $stat->correct }}</span>
+                                    <span class="text-muted small">/ {{ $stat->total }} câu</span>
+                                </td>
+                                <td class="text-center px-4">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <div class="progress flex-grow-1" style="height: 6px;">
+                                            <div class="progress-bar bg-{{ $stat->color }}" role="progressbar" 
+                                                 style="width: {{ $stat->percent }}%" 
+                                                 aria-valuenow="{{ $stat->percent }}" aria-valuemin="0" aria-valuemax="100">
+                                            </div>
+                                        </div>
+                                        <span class="small fw-bold text-{{ $stat->color }}" style="width: 35px;">{{ $stat->percent }}%</span>
+                                    </div>
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge bg-{{ $stat->color }} bg-opacity-10 text-{{ $stat->color }} border border-{{ $stat->color }} px-3 py-1 rounded-pill">
+                                        {{ $stat->status }}
+                                    </span>
+                                </td>
+                                <td class="text-end pe-4 text-{{ $stat->color }} fw-medium small">
+                                    {{ $stat->suggestion }}
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+            <div class="card-footer bg-light p-3">
+                <div class="d-flex align-items-start gap-2 text-muted small">
+                    <i class="bi bi-info-circle-fill mt-1"></i>
+                    <span>
+                        Hệ thống tự động sắp xếp các chủ đề bạn làm chưa tốt lên đầu. 
+                        Hãy ưu tiên ôn tập lại các chủ đề có đánh giá <strong class="text-danger">"Yếu"</strong> và <strong class="text-warning">"Khá"</strong>.
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        {{-- SECTION 3: CHI TIẾT BÀI LÀM --}}
         <div class="d-flex align-items-center gap-3 mb-4">
             <h4 class="fw-bold text-dark m-0">Chi tiết bài làm</h4>
             <div class="h-1px bg-secondary opacity-25 flex-grow-1"></div>
@@ -185,7 +270,7 @@
             @endphp
 
             <div class="q-wrapper {{ $statusClass }}">
-                {{-- Header --}}
+                {{-- Question Header --}}
                 <div class="p-3 {{ $headerBg }} border-bottom d-flex justify-content-between align-items-center">
                     <div class="d-flex align-items-center gap-3">
                         <span class="badge bg-white text-dark border shadow-sm px-3 py-2 rounded-pill fw-bold">Câu {{ $loop->iteration }}</span>
@@ -203,7 +288,7 @@
                         {!! $mainQuestion->content !!}
                     </div>
 
-                    {{-- TRƯỜNG HỢP 1: TRẮC NGHIỆM ĐƠN --}}
+                    {{-- CASE 1: TRẮC NGHIỆM ĐƠN --}}
                     @if($mainQuestion->type == 'single_choice')
                         <div class="d-flex flex-column gap-2">
                             @php
@@ -247,7 +332,7 @@
                             @endforeach
                         </div>
 
-                    {{-- TRƯỜNG HỢP 2: ĐÚNG/SAI CHÙM --}}
+                    {{-- CASE 2: ĐÚNG/SAI CHÙM --}}
                     @elseif($mainQuestion->type == 'true_false_group')
                         <div class="table-responsive border rounded-3">
                             <table class="table mb-0 align-middle">
@@ -282,23 +367,34 @@
                         </div>
                     @endif
 
-                    {{-- GỢI Ý ÔN TẬP (CÂU VĂN LIỀN MẠCH) --}}
+                    {{-- GỢI Ý ÔN TẬP --}}
                     @if($hasWrong)
                         <div class="tip-box">
-                            <i class="bi bi-lightbulb-fill fs-4 mt-1"></i>
+                            <i class="bi bi-lightbulb-fill fs-4 mt-1 flex-shrink-0"></i>
                             <div>
-                                <h6 class="fw-bold mb-1">Gợi ý ôn tập:</h6>
-                                <p class="mb-0 lh-base">
-                                    Bạn nên ôn lại kiến thức 
-                                    <strong class="text-dark">Lớp {{ $mainQuestion->grade }}</strong>, 
-                                    thuộc chủ đề <strong class="text-dark">{{ $mainQuestion->topic->name ?? '...' }}</strong>
-                                    @if($mainQuestion->coreContent)
-                                        , tập trung vào nội dung <strong class="text-dark">{{ $mainQuestion->coreContent->name }}</strong>
-                                    @endif
-                                    @if($mainQuestion->learningObjective)
-                                        để nắm vững yêu cầu <em class="text-dark">"{{ $mainQuestion->learningObjective->content }}"</em>
-                                    @endif.
+                                <h6 class="fw-bold mb-2">Gợi ý ôn tập:</h6>
+                                <p class="mb-2 lh-base">
+                                    Bạn cần ôn lại kiến thức <strong class="text-dark">Lớp {{ $mainQuestion->grade }}</strong>, 
+                                    thuộc chủ đề <strong class="text-dark">{{ $mainQuestion->topic->name ?? '...' }}</strong>.
                                 </p>
+
+                                @if($mainQuestion->coreContent || $mainQuestion->learningObjective)
+                                    <ul class="mb-0 ps-3 small text-secondary" style="list-style-type: disc;">
+                                        @if($mainQuestion->coreContent)
+                                            <li class="mb-1">
+                                                <span class="fw-semibold text-dark">Nội dung cốt lõi:</span> 
+                                                {{ $mainQuestion->coreContent->name }}
+                                            </li>
+                                        @endif
+                                        
+                                        @if($mainQuestion->learningObjective)
+                                            <li>
+                                                <span class="fw-semibold text-dark">Yêu cầu cần đạt:</span> 
+                                                <em class="text-dark">"{{ $mainQuestion->learningObjective->content }}"</em>
+                                            </li>
+                                        @endif
+                                    </ul>
+                                @endif
                             </div>
                         </div>
                     @endif
@@ -307,57 +403,53 @@
         @endforeach
     </div>
 
-    {{-- CHART SCRIPT: BIỂU ĐỒ MIỀN (AREA CHART) --}}
+    {{-- CHART SCRIPT --}}
     @if(isset($chartData) && count($chartData) > 0)
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const ctx = document.getElementById('progressChart').getContext('2d');
-            const data = @json($chartData); // Dữ liệu từ Controller
+            const data = @json($chartData);
 
-            // Tạo Gradient cho phần nền (Fill)
             const gradientFill = ctx.createLinearGradient(0, 0, 0, 300);
-            gradientFill.addColorStop(0, 'rgba(14, 165, 233, 0.5)'); // Xanh đậm ở trên
-            gradientFill.addColorStop(1, 'rgba(14, 165, 233, 0.0)'); // Trong suốt ở dưới
+            gradientFill.addColorStop(0, 'rgba(14, 165, 233, 0.5)');
+            gradientFill.addColorStop(1, 'rgba(14, 165, 233, 0.0)');
 
             new Chart(ctx, {
-                type: 'line', // Biểu đồ đường
+                type: 'line',
                 data: {
-                    labels: data.map(d => d.date), // Trục X: Ngày tháng
+                    labels: data.map(d => d.date),
                     datasets: [{
                         label: 'Điểm số',
-                        data: data.map(d => d.score), // Trục Y: Điểm
-                        borderColor: '#0ea5e9',       // Màu đường kẻ (Xanh dương)
-                        backgroundColor: gradientFill, // Màu nền gradient (Tạo hiệu ứng Area)
+                        data: data.map(d => d.score),
+                        borderColor: '#0ea5e9',
+                        backgroundColor: gradientFill,
                         borderWidth: 3,
                         pointBackgroundColor: '#fff',
                         pointBorderColor: '#0ea5e9',
                         pointRadius: 5,
                         pointHoverRadius: 7,
-                        fill: true, // [QUAN TRỌNG] Bật chế độ Area Chart
-                        tension: 0.4 // [QUAN TRỌNG] Làm mềm đường cong
+                        fill: true,
+                        tension: 0.4
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
-                        legend: { display: false }, // Ẩn chú thích vì chỉ có 1 đường
+                        legend: { display: false },
                         tooltip: {
                             backgroundColor: '#1e293b',
                             padding: 10,
                             cornerRadius: 8,
                             displayColors: false,
                             callbacks: {
-                                label: function(context) {
-                                    return 'Điểm: ' + context.parsed.y;
-                                }
+                                label: function(context) { return 'Điểm: ' + context.parsed.y; }
                             }
                         }
                     },
                     scales: {
                         y: {
-                            beginAtZero: true,
-                            max: 10,
+                            beginAtZero: true, max: 10,
                             grid: { borderDash: [5, 5], color: '#f1f5f9' },
                             ticks: { font: { family: "'Plus Jakarta Sans', sans-serif" } }
                         },

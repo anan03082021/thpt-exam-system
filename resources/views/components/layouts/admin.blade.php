@@ -13,11 +13,18 @@
     <style>
         body { background-color: #f3f4f6; font-family: 'Segoe UI', sans-serif; }
         .navbar-admin {
-            background: linear-gradient(to right, #1f2937, #111827); /* Màu tối cho Admin */
+            background: linear-gradient(to right, #1f2937, #111827); /* Màu tối admin */
         }
-        .nav-link { color: rgba(255,255,255,0.8) !important; font-weight: 500; }
-        .nav-link:hover, .nav-link.active { color: #fff !important; }
-        .nav-link.active { border-bottom: 2px solid #3b82f6; }
+        /* Style cho Link Menu */
+        .navbar-dark .navbar-nav .nav-link { color: rgba(255,255,255,0.75); font-weight: 500; padding: 0.5rem 1rem; }
+        .navbar-dark .navbar-nav .nav-link:hover, 
+        .navbar-dark .navbar-nav .nav-link.active { color: #fff; background-color: rgba(255,255,255,0.1); border-radius: 6px; }
+        
+        /* Style cho Dropdown menu con */
+        .dropdown-menu { border: none; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border-radius: 8px; margin-top: 10px; }
+        .dropdown-item { padding: 8px 16px; font-size: 0.95rem; }
+        .dropdown-item:hover { background-color: #f3f4f6; color: #2563eb; }
+        .dropdown-item i { width: 20px; text-align: center; margin-right: 8px; }
     </style>
     @stack('styles')
 </head>
@@ -34,25 +41,15 @@
             </button>
             
             <div class="collapse navbar-collapse" id="navbarNav">
+                {{-- MENU CHÍNH --}}
                 <ul class="navbar-nav me-auto">
-                    {{-- Menu Dashboard --}}
-                    <li class="nav-item">
-                        <a class="nav-link {{ request()->routeIs('admin.dashboard') ? 'active' : '' }}" 
-                           href="{{ route('admin.dashboard') }}">
-                            <i class="bi bi-speedometer2 me-1"></i> Tổng quan
-                        </a>
-                    </li>
+                    
+                    {{-- [QUAN TRỌNG] GỌI FILE MENU VÀO ĐÂY --}}
+                    @include('layouts.menus.admin')
 
-                    {{-- Menu Quản lý User --}}
-                    <li class="nav-item">
-                        <a class="nav-link {{ request()->routeIs('admin.users.*') ? 'active' : '' }}" 
-                           href="{{ route('admin.users.index') }}">
-                            <i class="bi bi-people-fill me-1"></i> Quản lý Tài khoản
-                        </a>
-                    </li>
                 </ul>
 
-                {{-- User Dropdown --}}
+                {{-- User Dropdown (Giữ nguyên của bạn) --}}
                 <ul class="navbar-nav">
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" role="button" data-bs-toggle="dropdown">
@@ -87,7 +84,7 @@
     {{-- Footer --}}
     <footer class="bg-white border-top py-3 mt-auto">
         <div class="container text-center text-muted small">
-            &copy; {{ date('Y') }} School Exam System. Administrator Area.
+            &copy; {{ date('Y') }} Administrator Area.
         </div>
     </footer>
 

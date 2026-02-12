@@ -1,4 +1,4 @@
-<x-layouts.teacher title="Chỉnh sửa câu hỏi #{{ $question->id }}">
+<x-layouts.shared title="Chỉnh sửa câu hỏi #{{ $question->id }}">
 
     @push('styles')
     <style>
@@ -274,4 +274,4 @@
     </script>
     @endpush
 
-</x-layouts.teacher>
+</x-layouts.shared>
