@@ -1,12 +1,7 @@
 <x-app-layout>
 @php
     // Tính toán thời gian
-    if (isset($session) && $session->id != 0) {
-        $endTimeTimestamp = \Carbon\Carbon::parse($session->end_at)->timestamp;
-    } else {
-        $duration = $exam->duration ?? 45; 
-        $endTimeTimestamp = now()->addMinutes($duration)->timestamp;
-    }
+    $endTimeTimestamp = \Carbon\Carbon::parse($session->end_at)->timestamp;
 
     $savedElective = $savedElective ?? session('elective_choice_' . ($session->id ?? 0), '');
     $allQuestions = collect($chungQuestions ?? []);
@@ -400,38 +395,56 @@
             doneList: [],
 
             init() { 
-                this.updateDoneList(); 
-                
-                this.$watch('currentIdx', () => {
-                    this.updateDoneList();
+                // 1. Khi vừa load trang, chờ giao diện render xong thì khôi phục đáp án
+                this.$nextTick(() => {
+                    this.restoreAnswers();
                 });
             },
             
-            // --- HÀM updateDoneList ĐÃ ĐƯỢC SỬA LẠI ĐỂ TÍNH ĐÚNG LOGIC ĐÚNG/SAI ---
+            // --- HÀM MỚI: ĐỌC DỮ LIỆU TỪ TRÌNH DUYỆT VÀ TÍCH LẠI RADIO ---
+            restoreAnswers() {
+                let saved = localStorage.getItem('exam_answers_{{ $exam->id }}');
+                if (saved) {
+                    let answersObj = JSON.parse(saved);
+                    // Duyệt qua các đáp án đã lưu
+                    for (let inputName in answersObj) {
+                        let inputValue = answersObj[inputName];
+                        // Tìm đúng ô radio đó và tích vào
+                        let radioElement = document.querySelector(`input[name="${inputName}"][value="${inputValue}"]`);
+                        if (radioElement) {
+                            radioElement.checked = true;
+                        }
+                    }
+                }
+                // Sau khi tích xong hết thì chạy bộ đếm để thanh tiến độ cập nhật
+                this.updateDoneList();
+            },
+            
             updateDoneList() {
                 let done = [];
-                
-                // Duyệt qua từng câu hỏi đang có trong danh sách
+                let answersToSave = {}; // Object chứa đáp án để lưu ngầm
+
+                // Ghi nhận toàn bộ đáp án đang được tích trên màn hình
+                document.querySelectorAll('input[type=radio]:checked').forEach(input => {
+                    answersToSave[input.name] = input.value; // Ví dụ: answers[123] = 456
+                });
+
+                // Xử lý đếm câu hoàn thành (Logic Đúng/Sai vẫn giữ nguyên)
                 this.questions.forEach(q => {
                     if (q.type === 'single_choice') {
-                        // Trắc nghiệm đơn: Chỉ cần 1 đáp án được chọn
                         let isChecked = document.querySelector(`input[name="answers[${q.id}]"]:checked`);
                         if (isChecked) {
                             done.push(q.id.toString());
                         }
                     } 
                     else if (q.type === 'true_false_group' && q.children) {
-                        // Đúng/Sai: Phải kiểm tra xem TẤT CẢ các câu con đã được chọn chưa
                         let allAnswered = true; 
-                        
                         q.children.forEach(child => {
                             let isChildChecked = document.querySelector(`input[name="answers[${child.id}]"]:checked`);
                             if (!isChildChecked) {
-                                allAnswered = false; // Có ít nhất 1 câu con chưa chọn -> Chưa xong
+                                allAnswered = false; 
                             }
                         });
-                        
-                        // Chỉ khi làm đủ 4/4 câu con (allAnswered = true) thì mới ghi nhận câu cha đã hoàn thành
                         if (allAnswered && q.children.length > 0) {
                             done.push(q.id.toString());
                         }
@@ -439,8 +452,10 @@
                 });
                 
                 this.doneList = done;
+
+                // Lưu dữ liệu vào localStorage mỗi khi có thay đổi
+                localStorage.setItem('exam_answers_{{ $exam->id }}', JSON.stringify(answersToSave));
             },
-            // ----------------------------------------------------------------------
             
             goTo(idx) {
                 if(idx >= 0 && idx < this.totalSteps) {
@@ -455,7 +470,6 @@
             confirmAndSelectElective(type) {
                 if(confirm("Bạn có chắc chắn muốn chọn phần thi này? Khi đã chọn sẽ không thể thay đổi!")) {
                     this.elective = type;
-                    
                     const newQuestions = (type === 'cs') ? this.rawCsQuestions : this.rawIctQuestions;
                     this.questions = [...this.questions, ...newQuestions];
                     
@@ -469,8 +483,8 @@
                         body: JSON.stringify({ elective: type })
                     });
 
-                    // Cập nhật lại danh sách đã làm sau khi load thêm câu hỏi
-                    this.$nextTick(() => { this.updateDoneList(); });
+                    // Khôi phục lại đáp án của phần tự chọn (nếu trước đó đã làm rồi F5)
+                    this.$nextTick(() => { this.restoreAnswers(); });
                 }
             }
         }));
@@ -478,8 +492,10 @@
 
     function confirmSubmit() {
         if(confirm("Xác nhận nộp bài làm?")) {
+            // Khi nộp bài, phải xóa sạch bộ nhớ tạm để thi lại từ đầu
+            localStorage.removeItem('exam_answers_{{ $exam->id }}');
+
             const form = document.getElementById('examForm');
-            
             const alpineData = Alpine.$data(document.querySelector('[x-data]'));
             let electiveInput = document.createElement('input');
             electiveInput.type = 'hidden';
