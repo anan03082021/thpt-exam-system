@@ -195,43 +195,60 @@ if ($isWhitelisted || $hasAccessByPassword || $sessionId == 0) {
         session()->forget('elective_choice_' . $sessionId);
 
         if ($isPractice) {
+            session()->forget('practice_end_time_' . $examId);
             return redirect()->route('student.exam.result.practice', $attempt->id);
         } else {
             return redirect()->route('student.exam.result.official', $attempt->id);
         }
     }
 
-    // =========================================================================
+// =========================================================================
     // 4. BẮT ĐẦU LUYỆN TẬP
     // =========================================================================
-public function startPractice($examId)
-{
-    $exam = Exam::with(['questions' => function($q) {
-        $q->whereNull('parent_id')
-          ->with(['answers', 'children.answers'])
-          ->withPivot('order')
-          ->orderBy('exam_questions.order', 'asc');
-    }])->findOrFail($examId);
+    public function startPractice($examId)
+    {
+        $exam = Exam::with(['questions' => function($q) {
+            $q->whereNull('parent_id')
+              ->with(['answers', 'children.answers'])
+              ->withPivot('order')
+              ->orderBy('exam_questions.order', 'asc');
+        }])->findOrFail($examId);
 
-    // Tạo session giả lập
-    $session = new ExamSession();
-    $session->id = 0; 
-    $session->title = "Luyện tập: " . $exam->title;
-    $session->exam_id = $exam->id;
-    $session->start_at = now();
-    $session->end_at = now()->addMinutes($exam->duration);
+        $session = new ExamSession();
+        $session->id = 0; 
+        $session->title = "Luyện tập: " . $exam->title;
+        $session->exam_id = $exam->id;
+        $session->start_at = now();
+        
+        // --- SỬA LẠI ĐỂ KHÔNG RESET THỜI GIAN KHI F5 ---
+        $sessionKey = 'practice_end_time_' . $exam->id;
+        if (session()->has($sessionKey)) {
+            // Nếu đã có thời gian kết thúc lưu trong session thì lấy ra dùng
+            $session->end_at = session($sessionKey);
+            
+            // Nếu F5 mà thời gian lưu cũ đã quá hạn (hết giờ), ta tạo mới lại 45p
+            if (now() > $session->end_at) {
+                $session->end_at = now()->addMinutes($exam->duration);
+                session([$sessionKey => $session->end_at]);
+            }
+        } else {
+            // Nếu là lần đầu tiên mở đề, lưu mốc thời gian kết thúc vào session
+            $session->end_at = now()->addMinutes($exam->duration);
+            session([$sessionKey => $session->end_at]);
+        }
+        // ------------------------------------------------
 
-    $allQuestions = $exam->questions;
-    
-    // Thêm values() để đồng bộ index 0, 1, 2...
-    $chungQuestions = $allQuestions->filter(fn($q) => in_array(strtolower(trim($q->orientation ?? '')), ['chung', '']))->values();
-    $csQuestions = $allQuestions->filter(fn($q) => strtolower(trim($q->orientation ?? '')) === 'cs')->values();
-    $ictQuestions = $allQuestions->filter(fn($q) => strtolower(trim($q->orientation ?? '')) === 'ict')->values();
+        $allQuestions = $exam->questions;
+        
+        $chungQuestions = $allQuestions->filter(fn($q) => in_array(strtolower(trim($q->orientation ?? '')), ['chung', '']))->values();
+        $csQuestions = $allQuestions->filter(fn($q) => strtolower(trim($q->orientation ?? '')) === 'cs')->values();
+        $ictQuestions = $allQuestions->filter(fn($q) => strtolower(trim($q->orientation ?? '')) === 'ict')->values();
 
-    $savedElective = session('elective_choice_0', '');
+        $savedElective = session('elective_choice_0', '');
 
-    return view('exam.take', compact('exam', 'session', 'chungQuestions', 'csQuestions', 'ictQuestions', 'savedElective'));
-}
+        return view('exam.take', compact('exam', 'session', 'chungQuestions', 'csQuestions', 'ictQuestions', 'savedElective'));
+    }
+
 
 // =========================================================================
     // 5. LỊCH SỬ THI (CÁCH: LỌC THỦ CÔNG - ĐẢM BẢO 100% SẠCH)
@@ -366,14 +383,27 @@ public function startPractice($examId)
     // 8. API LƯU TRẠNG THÁI CHỌN MÔN (CHO JS GỌI)
     // =========================================================================
     public function saveElective(Request $request, $sessionId)
-    {
-        $request->validate([
-            'elective' => 'required|in:cs,ict'
-        ]);
+{
+    $request->validate([
+        'elective' => 'required|in:cs,ict'
+    ]);
 
-        // Lưu vào Session
-        session(['elective_choice_' . $sessionId => $request->elective]);
+    // 1. Lưu vào Session
+    session(['elective_choice_' . $sessionId => $request->elective]);
 
-        return response()->json(['success' => true]);
-    }
+    // 2. Lấy danh sách câu hỏi của môn đã chọn
+    $session = ExamSession::with(['exam.questions' => function($q) {
+        $q->whereNull('parent_id')->with(['answers', 'children.answers']);
+    }])->findOrFail($sessionId);
+
+    $questions = $session->exam->questions->filter(function($q) use ($request) {
+        return strtolower(trim($q->orientation ?? '')) === $request->elective;
+    })->values();
+
+    // 3. Trả về JSON để Frontend render thêm câu hỏi
+    return response()->json([
+        'success' => true,
+        'questions' => $questions
+    ]);
+}
 }
