@@ -60,7 +60,7 @@ class DocumentController extends Controller
             
             // Lấy thông tin file
             $fileType = $file->getClientOriginalExtension();
-            $fileSize = round($file->getSize() / 1024, 2) . ' KB';
+            $fileSize = $file->getSize();
             
             // Upload vào thư mục public/documents
             $path = $file->store('documents', 'public');

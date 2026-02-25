@@ -196,6 +196,8 @@ if ($isWhitelisted || $hasAccessByPassword || $sessionId == 0) {
 
         if ($isPractice) {
             session()->forget('practice_end_time_' . $examId);
+            return redirect()->route('student.exam.result.practice', $attempt->id)
+                             ->with('success', 'Nộp bài luyện tập thành công!');
         } else {
             return redirect()->route('student.exam.result.official', $attempt->id);
         }

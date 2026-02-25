@@ -24,5 +24,6 @@ class AppServiceProvider extends ServiceProvider
         // Đảm bảo đường dẫn này đúng. 
         // resource_path('views/layouts') nghĩa là thư mục: resources/views/layouts
         Blade::anonymousComponentPath(resource_path('views/layouts'), 'layouts');
+        \Illuminate\Pagination\Paginator::useBootstrapFive();
     }
 }   

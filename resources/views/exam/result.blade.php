@@ -370,31 +370,20 @@
                     {{-- GỢI Ý ÔN TẬP --}}
                     @if($hasWrong)
                         <div class="tip-box">
-                            <i class="bi bi-lightbulb-fill fs-4 mt-1 flex-shrink-0"></i>
+                            <i class="bi bi-lightbulb-fill fs-4 mt-1"></i>
                             <div>
-                                <h6 class="fw-bold mb-2">Gợi ý ôn tập:</h6>
-                                <p class="mb-2 lh-base">
-                                    Bạn cần ôn lại kiến thức <strong class="text-dark">Lớp {{ $mainQuestion->grade }}</strong>, 
-                                    thuộc chủ đề <strong class="text-dark">{{ $mainQuestion->topic->name ?? '...' }}</strong>.
+                                <h6 class="fw-bold mb-1">Gợi ý ôn tập:</h6>
+                                <p class="mb-0 lh-base">
+                                    Bạn nên ôn lại kiến thức 
+                                    <strong class="text-dark">Lớp {{ $mainQuestion->grade }}</strong>, 
+                                    thuộc chủ đề <strong class="text-dark">{{ $mainQuestion->topic->name ?? '...' }}</strong>
+                                    @if($mainQuestion->coreContent)
+                                        , tập trung vào nội dung <strong class="text-dark">{{ $mainQuestion->coreContent->name }}</strong>
+                                    @endif
+                                    @if($mainQuestion->learningObjective)
+                                        để nắm vững yêu cầu <em class="text-dark">"{{ $mainQuestion->learningObjective->content }}"</em>
+                                    @endif.
                                 </p>
-
-                                @if($mainQuestion->coreContent || $mainQuestion->learningObjective)
-                                    <ul class="mb-0 ps-3 small text-secondary" style="list-style-type: disc;">
-                                        @if($mainQuestion->coreContent)
-                                            <li class="mb-1">
-                                                <span class="fw-semibold text-dark">Nội dung cốt lõi:</span> 
-                                                {{ $mainQuestion->coreContent->name }}
-                                            </li>
-                                        @endif
-                                        
-                                        @if($mainQuestion->learningObjective)
-                                            <li>
-                                                <span class="fw-semibold text-dark">Yêu cầu cần đạt:</span> 
-                                                <em class="text-dark">"{{ $mainQuestion->learningObjective->content }}"</em>
-                                            </li>
-                                        @endif
-                                    </ul>
-                                @endif
                             </div>
                         </div>
                     @endif

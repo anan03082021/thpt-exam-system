@@ -43,4 +43,16 @@ class Document extends Model
             default => 'bi-file-earmark-text',
         };
     }
+
+    public function topic()
+{
+    // Tài liệu thuộc về một Chủ đề
+    return $this->belongsTo(Topic::class, 'topic_id');
+}
+
+public function user()
+{
+    // Tài liệu được đăng bởi một Giáo viên
+    return $this->belongsTo(User::class, 'user_id');
+}
 }

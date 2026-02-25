@@ -209,7 +209,7 @@
                                             <input type="radio" :name="'answers[' + question.id + ']'" :value="ans.id" class="d-none" @change="updateDoneList()">
                                             <div class="option-box">
                                                 <div class="radio-dot"></div>
-                                                <span class="fw-medium text-dark" x-html="ans.content"></span>
+                                                <span class="fw-medium text-dark" x-text="ans.content"></span>
                                             </div>
                                         </label>
                                     </template>
@@ -229,7 +229,7 @@
                                         <tbody>
                                             <template x-for="child in question.children" :key="child.id">
                                                 <tr>
-                                                    <td class="ps-4 fw-medium text-dark" x-html="child.content"></td>
+                                                    <td class="ps-4 fw-medium text-dark" x-text="child.content"></td>
                                                     <template x-for="ans in child.answers" :key="ans.id">
                                                         <td class="text-center">
                                                             <input type="radio" :name="'answers[' + child.id + ']'" :value="ans.id" class="form-check-input shadow-none border-secondary" style="width: 22px; height: 22px; cursor: pointer;" @change="updateDoneList()">
@@ -280,7 +280,7 @@
                                                 <template x-for="ans in q.answers" :key="'prev_cs_ans_'+ans.id">
                                                     <div class="d-flex align-items-start gap-2 text-muted small">
                                                         <i class="bi bi-circle mt-1" style="font-size: 0.5rem;"></i>
-                                                        <span x-html="ans.content"></span>
+                                                        <span x-text="ans.content"></span>
                                                     </div>
                                                 </template>
                                             </div>
@@ -290,7 +290,7 @@
                                                 <template x-for="child in q.children" :key="'prev_cs_child_'+child.id">
                                                     <div class="d-flex align-items-start gap-2 text-muted small">
                                                         <i class="bi bi-check2-square mt-1"></i>
-                                                        <span x-html="child.content"></span>
+                                                        <span x-text="child.content"></span>
                                                     </div>
                                                 </template>
                                             </div>
@@ -311,7 +311,7 @@
                                                 <template x-for="ans in q.answers" :key="'prev_ict_ans_'+ans.id">
                                                     <div class="d-flex align-items-start gap-2 text-muted small">
                                                         <i class="bi bi-circle mt-1" style="font-size: 0.5rem;"></i>
-                                                        <span x-html="ans.content"></span>
+                                                        <span x-text="ans.content"></span>
                                                     </div>
                                                 </template>
                                             </div>
@@ -321,7 +321,7 @@
                                                 <template x-for="child in q.children" :key="'prev_ict_child_'+child.id">
                                                     <div class="d-flex align-items-start gap-2 text-muted small">
                                                         <i class="bi bi-check2-square mt-1"></i>
-                                                        <span x-html="child.content"></span>
+                                                        <span x-text="child.content"></span>
                                                     </div>
                                                 </template>
                                             </div>

@@ -140,7 +140,7 @@
 
                             {{-- Ngày tạo --}}
                             <td class="text-muted small">
-                                <div><i class="bi bi-calendar3 me-1"></i>{{ $q->created_at->format('d/m/Y') }}</div>
+                                <div><i class="bi bi-calendar3 me-1"></i>{{ $q->created_at?->format('d/m/Y') ?? 'Chưa cập nhật' }}</div>
                                 <div class="text-xs opacity-75 mt-1">{{ $q->created_at->format('H:i') }}</div>
                             </td>
 
